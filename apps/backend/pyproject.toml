@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "emotalk-backend"
+version = "0.1.0"
+description = "Backend service for emotalk"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116.0,<1.0.0",
+  "uvicorn[standard]>=0.35.0,<1.0.0",
+  "pydantic-settings>=2.10.0,<3.0.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28.0,<1.0.0",
+  "mypy>=1.18.0,<2.0.0",
+  "pytest>=8.4.0,<9.0.0",
+  "ruff>=0.12.0,<1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/emotalk_backend"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "PT", "RUF"]
+ignore = ["S104"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+plugins = []
+mypy_path = "src"
+

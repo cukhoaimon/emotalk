@@ -1,0 +1,11 @@
+{
+  "name": "@emotalk/backend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "uv run uvicorn emotalk_backend.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "uv sync",
+    "test": "uv run pytest -q",
+    "lint": "uv run ruff check src tests"
+  }
+}

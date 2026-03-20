@@ -1,0 +1,82 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: #f2f5f8;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 2rem;
+  background: radial-gradient(circle at 10% 10%, #dbeafe 0, #f2f5f8 40%);
+}
+
+.card {
+  max-width: 780px;
+  margin: 0 auto 1.5rem auto;
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.config {
+  margin: 0.5rem 0 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #991b1b;
+  margin-top: 0.75rem;
+}
+
+.video-grid {
+  max-width: 780px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.video-stack {
+  min-height: 240px;
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.video-tile {
+  min-height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #111827;
+}
