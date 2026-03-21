@@ -1,27 +1,23 @@
-const openai = require("../config/openai");
-const { EMOTION_PROMPTS } = require("../config/emotions");
+const { runConversationTurn } = require("./chatService");
 const { createHttpError } = require("../utils/httpError");
 
-async function generateEmotionResponse(emotion, transcript) {
+async function generateEmotionReply(emotion, transcript, options = {}) {
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.9,
-      messages: [
-        {
-          role: "system",
-          content: `${EMOTION_PROMPTS[emotion]} Respond in English using 2 to 4 sentences. Make the tone clearly distinct for this emotion.`
-        },
-        {
-          role: "user",
-          content: transcript
-        }
-      ]
+    const result = await runConversationTurn({
+      sessionId: options.sessionId,
+      userMessage: transcript,
+      emotion,
+      systemInstruction:
+        "You are a voice conversation assistant. Reply in English using 2 to 4 sentences. Sound natural when read aloud and stay clearly consistent with the selected emotion.",
+      persist: options.persist,
+      allowWebSearch: false
     });
 
     return {
       emotion,
-      text: completion.choices[0]?.message?.content?.trim() || ""
+      text: result.reply,
+      sessionId: result.sessionId,
+      toolEvents: result.toolEvents
     };
   } catch (error) {
     throw createHttpError(
@@ -31,10 +27,6 @@ async function generateEmotionResponse(emotion, transcript) {
   }
 }
 
-async function generateEmotionResponses(emotions, transcript) {
-  return Promise.all(emotions.map((emotion) => generateEmotionResponse(emotion, transcript)));
-}
-
 module.exports = {
-  generateEmotionResponses
+  generateEmotionReply
 };

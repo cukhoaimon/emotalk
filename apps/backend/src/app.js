@@ -5,6 +5,7 @@ const multer = require("multer");
 
 const agoraRouter = require("./routes/agoraRoute");
 const analyzeAudioRouter = require("./routes/analyzeAudioRoute");
+const chatRouter = require("./routes/chatRoute");
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.get("/health", (req, res) => {
 
 app.use("/", agoraRouter);
 app.use("/", analyzeAudioRouter);
+app.use("/", chatRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found." });
