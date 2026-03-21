@@ -11,6 +11,9 @@
   --mint: #7cf29a;
   --danger: #ff5d8f;
   --shadow: 0 30px 80px rgba(4, 1, 15, 0.48);
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -43,7 +46,7 @@ a { color: var(--sky); text-decoration: none; }
 .hero-copy, .empty-copy, .timeline-text, .analysis-response, .transcript, .status-card p, .video-placeholder p { color: var(--muted); line-height: 1.7; }
 
 .meet-shell { display: grid; grid-template-columns: minmax(0, 1.5fr) 380px; gap: 18px; margin-top: 18px; }
-.stage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.stage-grid { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
 .call-tile, .panel { border-radius: 30px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .call-tile, .panel { padding: 18px; }
 .call-tile { display: flex; flex-direction: column; }
@@ -64,7 +67,7 @@ a { color: var(--sky); text-decoration: none; }
 
 .video-stage, .emotion-preview { position: relative; margin-top: 16px; border-radius: 24px; overflow: hidden; }
 .video-stage {
-  aspect-ratio: 16 / 10; min-height: clamp(220px, 32vw, 380px); max-height: 380px;
+  aspect-ratio: 16 / 10; min-height: clamp(280px, 40vw, 520px); max-height: 520px;
   background: radial-gradient(circle at top, rgba(255, 255, 255, 0.12), transparent 26%), linear-gradient(180deg, #25163d 0%, #1a112c 100%);
 }
 .remote-stage {

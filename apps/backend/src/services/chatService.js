@@ -66,7 +66,7 @@ function getTextContent(message) {
 }
 
 async function createCompletion(messages, allowWebSearch) {
-  return openai.chat.completions.create({
+  return openai.getOpenAI().chat.completions.create({
     model: CHAT_MODEL,
     temperature: 0.8,
     tools: allowWebSearch && process.env.TINYFISH_API_KEY ? [WEB_SEARCH_TOOL] : undefined,
