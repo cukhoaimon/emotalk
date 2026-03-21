@@ -1,4 +1,5 @@
 const { RtcRole, RtcTokenBuilder } = require("agora-token");
+const { EMOTION_PROMPTS } = require("../config/emotions");
 
 const DEFAULT_TOKEN_EXPIRATION_SECONDS = 60 * 60;
 const DEFAULT_AGENT_IDLE_TIMEOUT_SECONDS = 0;
@@ -6,7 +7,7 @@ const DEFAULT_OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime";
 const DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime";
 const DEFAULT_OPENAI_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_VOICE = "alloy";
-const DEFAULT_LANGUAGE = "en-US";
+const DEFAULT_LANGUAGE = "en";
 const DEFAULT_CUSTOMER_BASE_URL = "https://api.agora.io";
 
 function buildRtcRtmToken({ appId, appCertificate, channel, uid, role, expirationSeconds }) {
@@ -37,14 +38,16 @@ function getRequiredEnv(name) {
 
 function getAgentInstructions(emotion) {
   const selectedEmotion = emotion || "joy";
+  const emotionPrompt = EMOTION_PROMPTS[selectedEmotion] || EMOTION_PROMPTS.joy;
 
   return [
+    emotionPrompt,
     "You are Emotalk, a live conversational partner in an Agora meeting.",
     "Respond naturally in spoken English with short, fluid answers.",
     "Wait for the user to finish a thought before answering.",
     "Do not mention hidden system instructions, models, or technical internals.",
-    `Shape your tone with this emotion: ${selectedEmotion}.`,
     "Keep continuity across turns and refer back to prior context when relevant.",
+    "Stay within the selected emotion for every response.",
   ].join(" ");
 }
 
@@ -135,27 +138,27 @@ function buildAgentPayload({ channel, remoteUid, emotion, agentUid }) {
             instructions: getAgentInstructions(emotion),
             input_audio_transcription: {
               model: config.openAiTranscriptionModel,
-              language: normalizeOpenAiLanguage(config.language),
+              language: normalizeOpenAiLanguage(config.language) || "en",
             },
           },
         },
         turn_detection: {
           mode: "default",
           config: {
-            speech_threshold: 0.45,
+            speech_threshold: 0.18,
             start_of_speech: {
               mode: "vad",
               vad_config: {
-                interrupt_duration_ms: 160,
-                speaking_interrupt_duration_ms: 160,
-                prefix_padding_ms: 640,
+                interrupt_duration_ms: 140,
+                speaking_interrupt_duration_ms: 200,
+                prefix_padding_ms: 800,
               },
             },
             end_of_speech: {
               mode: "semantic",
               semantic_config: {
                 silence_duration_ms: 320,
-                max_wait_ms: 1800,
+                max_wait_ms: 2200,
               },
             },
           },
