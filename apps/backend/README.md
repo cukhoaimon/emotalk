@@ -35,6 +35,10 @@ Create a `.env` file:
 ```env
 OPENAI_API_KEY=your_key_here
 PORT=3000
+CORS_ORIGIN=http://localhost:5173
+AGORA_APP_ID=your_agora_app_id
+AGORA_APP_CERTIFICATE=your_agora_app_certificate
+AGORA_TOKEN_EXPIRATION_SECONDS=3600
 ```
 
 Run the server:
@@ -50,6 +54,15 @@ npm start
 ```
 
 ## API
+
+### `GET /agora/session`
+
+Returns an Agora RTC session payload for the frontend MVP. Query params:
+
+- `channel`: channel name
+- `role`: `broadcast` or `debug`
+
+If `AGORA_APP_CERTIFICATE` is configured, the backend generates a fresh RTC token per request.
 
 ### `POST /analyze-audio`
 
@@ -87,6 +100,7 @@ Form-data fields:
 - Invalid file types, missing emotions, more than 3 emotions, and OpenAI API failures return JSON errors
 - Uploaded files are deleted after each request finishes
 - Successful requests also write JSON output files into the `outputs/` folder
+- The Agora session endpoint is intended for the hackathon MVP so multiple local tabs can join the same channel with different identities
 
 ## Example curl
 

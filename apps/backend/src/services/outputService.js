@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 
-const outputDir = path.join(process.cwd(), "outputs");
+const outputDir = path.join(__dirname, "..", "..", "outputs");
 
 function buildTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");

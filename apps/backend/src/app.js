@@ -1,11 +1,18 @@
 const express = require("express");
+const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const multer = require("multer");
 
+const agoraRouter = require("./routes/agoraRoute");
 const analyzeAudioRouter = require("./routes/analyzeAudioRoute");
 
 const app = express();
 
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : true;
+
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
 app.use(
@@ -24,6 +31,7 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+app.use("/", agoraRouter);
 app.use("/", analyzeAudioRouter);
 
 app.use((req, res) => {
