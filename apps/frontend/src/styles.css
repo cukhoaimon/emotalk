@@ -38,13 +38,39 @@ body {
 }
 
 button,
-audio {
+input,
+a,
+video {
   font: inherit;
+}
+
+button,
+a {
+  color: inherit;
 }
 
 button {
   border: 0;
   cursor: pointer;
+}
+
+input {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  padding: 14px 16px;
+}
+
+input:disabled,
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+input::placeholder {
+  color: rgba(247, 242, 255, 0.45);
 }
 
 .app-shell {
@@ -58,7 +84,10 @@ button {
 .call-tile,
 .summary-pill,
 .status-card,
-.recorder-empty {
+.recorder-empty,
+.recording-card,
+.log-entry,
+.field input {
   backdrop-filter: blur(18px);
 }
 
@@ -74,12 +103,22 @@ button {
   box-shadow: var(--shadow);
 }
 
+.hero-copy-block {
+  max-width: 62ch;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--sky);
   text-transform: uppercase;
   letter-spacing: 0.2em;
   font-size: 0.72rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
 }
 
 .hero-bar h1,
@@ -93,7 +132,6 @@ button {
 }
 
 .hero-copy {
-  max-width: 62ch;
   margin: 14px 0 0;
   color: var(--muted);
   line-height: 1.7;
@@ -101,9 +139,12 @@ button {
 
 .call-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: 12px;
-  min-width: min(100%, 420px);
+  min-width: min(100%, 480px);
+}
+
+.call-summary.four-up {
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
 }
 
 .summary-pill {
@@ -115,7 +156,8 @@ button {
 
 .summary-pill span,
 .recorder-meta span,
-.tile-label {
+.tile-label,
+.field span {
   display: block;
   font-size: 0.76rem;
   letter-spacing: 0.16em;
@@ -137,7 +179,7 @@ button {
 
 .meet-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 360px;
+  grid-template-columns: minmax(0, 1.5fr) 380px;
   gap: 18px;
   margin-top: 18px;
 }
@@ -162,11 +204,16 @@ button {
 }
 
 .tile-topbar,
-.panel-header {
+.panel-header,
+.recording-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.stacked-header {
+  align-items: flex-start;
 }
 
 .tile-badge {
@@ -197,11 +244,48 @@ button {
     linear-gradient(180deg, #25163d 0%, #1a112c 100%);
 }
 
-.video-stage video {
+.video-stack {
+  min-height: 320px;
+  display: grid;
+  gap: 0.5rem;
+  align-content: stretch;
+}
+
+.video-stack.embedded-stack {
+  min-height: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.video-stack.side-stack {
+  min-height: 220px;
+  margin-top: 16px;
+}
+
+.video-tile {
+  min-height: 220px;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #111827;
+}
+
+.video-tile video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
+}
+
+.empty-aware {
+  position: relative;
+}
+
+.empty-state {
+  margin: auto;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.78);
+  padding: 1rem;
 }
 
 .video-fallback {
@@ -214,6 +298,10 @@ button {
   background:
     radial-gradient(circle at center, rgba(255, 119, 200, 0.24), transparent 26%),
     linear-gradient(180deg, rgba(80, 46, 141, 0.95), rgba(25, 16, 45, 0.95));
+}
+
+.overlay-fallback {
+  pointer-events: none;
 }
 
 .avatar-core {
@@ -339,11 +427,23 @@ button {
   padding: 18px;
 }
 
+.field {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 .control-row,
-.emotion-picker-grid {
+.emotion-picker-grid,
+.recording-list,
+.log-list {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+.split-actions {
+  grid-template-columns: 1fr;
 }
 
 .control-chip,
@@ -379,11 +479,12 @@ button {
   color: rgba(247, 242, 255, 0.72);
 }
 
-.status-card {
+.status-card,
+.recording-card,
+.log-entry {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-top: 16px;
   padding: 16px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.06);
@@ -391,7 +492,8 @@ button {
 }
 
 .status-card p,
-.recorder-empty {
+.recorder-empty,
+.muted {
   margin: 0;
   color: var(--muted);
   line-height: 1.7;
@@ -404,17 +506,35 @@ button {
   border-radius: 999px;
   background: var(--mint);
   box-shadow: 0 0 20px rgba(124, 242, 154, 0.7);
+  flex: 0 0 auto;
 }
 
-.recorder-meta {
+.compact-list {
+  margin-top: 16px;
+}
+
+.recording-card {
   display: grid;
-  gap: 14px;
-  margin-top: 16px;
 }
 
-.audio-player {
+.recording-meta {
+  align-items: flex-start;
+}
+
+.recording-meta strong {
+  display: block;
+}
+
+.recording-meta span {
+  color: var(--muted);
+}
+
+.recording-preview {
   width: 100%;
-  margin-top: 16px;
+  max-height: 300px;
+  border-radius: 16px;
+  margin-top: 4px;
+  background: #000;
 }
 
 .recorder-empty {
@@ -423,6 +543,17 @@ button {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.log-entry {
+  margin: 0;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.92rem;
+}
+
+a {
+  color: var(--sky);
+  text-decoration: none;
 }
 
 @keyframes floaty {
@@ -442,7 +573,7 @@ button {
   }
 
   .control-rail {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -481,7 +612,8 @@ button {
 
   .video-overlay,
   .tile-topbar,
-  .panel-header {
+  .panel-header,
+  .recording-meta {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -490,5 +622,9 @@ button {
     left: 16px;
     right: 16px;
     bottom: 16px;
+  }
+
+  .control-rail {
+    grid-template-columns: 1fr;
   }
 }
