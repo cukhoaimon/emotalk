@@ -4,7 +4,11 @@ build
 .DS_Store
 .env
 .env.*
+!.env.example
 coverage
 *.log
 .turbo
 .cache
+*.tsbuildinfo
+worktrees/
+apps/backend/data/avatar-voice-config.json
