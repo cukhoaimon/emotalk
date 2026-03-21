@@ -5,6 +5,13 @@ const { createHttpError } = require("../utils/httpError");
 const { transcribeAudio } = require("../services/speechService");
 const { generateEmotionReply } = require("../services/aiService");
 const { saveAnalysisResult } = require("../services/outputService");
+const { synthesizeSpeech } = require("../services/ttsService");
+
+function parseWithSpeech(value) {
+  return typeof value === "string"
+    ? ["1", "true", "yes", "on"].includes(value.trim().toLowerCase())
+    : Boolean(value);
+}
 
 async function analyzeAudioRequest(req, persistOutput) {
   if (!req.file) {
@@ -38,6 +45,13 @@ async function analyzeAudioRequest(req, persistOutput) {
     sessionId: response.sessionId,
     toolEvents: response.toolEvents
   };
+
+  if (parseWithSpeech(req.body.withSpeech)) {
+    result.speech = await synthesizeSpeech({
+      text: response.text,
+      emotion: response.emotion
+    });
+  }
 
   if (!persistOutput) {
     return result;

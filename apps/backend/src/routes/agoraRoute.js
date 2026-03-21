@@ -6,6 +6,7 @@ const {
   startConversationalAgent,
   stopConversationalAgent,
 } = require("../services/conversationalAgentService");
+const { streamCustomChatCompletion } = require("../services/agoraCustomLlmService");
 
 const router = express.Router();
 
@@ -140,6 +141,14 @@ router.post("/agora/agent/:agentId/leave", async (req, res, next) => {
     return res.status(200).json(response || { status: "stopped" });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.post("/agora/custom-llm/chat/completions", async (req, res, next) => {
+  try {
+    await streamCustomChatCompletion(req, res);
+  } catch (error) {
+    next(error);
   }
 });
 

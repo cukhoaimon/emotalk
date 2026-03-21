@@ -8,6 +8,7 @@ const DEFAULT_OPENAI_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_VOICE = "alloy";
 const DEFAULT_LANGUAGE = "en-US";
 const DEFAULT_CUSTOMER_BASE_URL = "https://api.agora.io";
+const DEFAULT_CUSTOM_LLM_PATH = "/agora/custom-llm/chat/completions";
 
 function buildRtcRtmToken({ appId, appCertificate, channel, uid, role, expirationSeconds }) {
   const privilegeExpiredTs = Math.floor(Date.now() / 1000) + expirationSeconds;
@@ -68,10 +69,14 @@ function getAgoraConfig() {
   const appCertificate = getRequiredEnv("AGORA_APP_CERTIFICATE");
   const customerId = getRequiredEnv("AGORA_CAI_CUSTOMER_ID");
   const customerSecret = getRequiredEnv("AGORA_CAI_CUSTOMER_SECRET");
-  const openAiApiKey = getRequiredEnv("OPENAI_API_KEY");
   const expirationSeconds = Number(
     process.env.AGORA_TOKEN_EXPIRATION_SECONDS || DEFAULT_TOKEN_EXPIRATION_SECONDS
   );
+  const customLlmBaseUrl = process.env.BACKEND_PUBLIC_BASE_URL?.trim() || "";
+  const customLlmUrl = process.env.AGORA_CAI_CUSTOM_LLM_URL?.trim() ||
+    (customLlmBaseUrl ? `${customLlmBaseUrl}${DEFAULT_CUSTOM_LLM_PATH}` : "");
+  const useCustomLlm = Boolean(customLlmUrl);
+  const openAiApiKey = useCustomLlm ? process.env.OPENAI_API_KEY?.trim() || "" : getRequiredEnv("OPENAI_API_KEY");
 
   return {
     appId,
@@ -79,6 +84,9 @@ function getAgoraConfig() {
     customerId,
     customerSecret,
     openAiApiKey,
+    useCustomLlm,
+    customLlmUrl,
+    customLlmApiKey: process.env.AGORA_CAI_CUSTOM_LLM_API_KEY?.trim() || "",
     expirationSeconds,
     customerBaseUrl: process.env.AGORA_CAI_BASE_URL?.trim() || DEFAULT_CUSTOMER_BASE_URL,
     openAiRealtimeUrl:
@@ -119,26 +127,41 @@ function buildAgentPayload({ channel, remoteUid, emotion, agentUid }) {
         enable_string_uid: true,
         idle_timeout: config.idleTimeoutSeconds,
         advanced_features: {
-          enable_mllm: true,
+          ...(config.useCustomLlm ? {} : { enable_mllm: true }),
           enable_rtm: true,
         },
-        mllm: {
-          url: config.openAiRealtimeUrl,
-          api_key: config.openAiApiKey,
-          vendor: "openai",
-          style: "openai",
-          input_modalities: ["audio"],
-          output_modalities: ["text", "audio"],
-          params: {
-            model: config.openAiRealtimeModel,
-            voice: config.openAiVoice,
-            instructions: getAgentInstructions(emotion),
-            input_audio_transcription: {
-              model: config.openAiTranscriptionModel,
-              language: normalizeOpenAiLanguage(config.language),
-            },
-          },
-        },
+        ...(config.useCustomLlm
+          ? {
+              llm: {
+                url: config.customLlmUrl,
+                api_key: config.customLlmApiKey,
+                system_messages: [
+                  {
+                    role: "system",
+                    content: getAgentInstructions(emotion)
+                  }
+                ]
+              }
+            }
+          : {
+              mllm: {
+                url: config.openAiRealtimeUrl,
+                api_key: config.openAiApiKey,
+                vendor: "openai",
+                style: "openai",
+                input_modalities: ["audio"],
+                output_modalities: ["text", "audio"],
+                params: {
+                  model: config.openAiRealtimeModel,
+                  voice: config.openAiVoice,
+                  instructions: getAgentInstructions(emotion),
+                  input_audio_transcription: {
+                    model: config.openAiTranscriptionModel,
+                    language: normalizeOpenAiLanguage(config.language),
+                  },
+                },
+              }
+            }),
         turn_detection: {
           mode: "default",
           config: {

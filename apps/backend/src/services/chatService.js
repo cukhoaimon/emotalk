@@ -1,4 +1,4 @@
-const openai = require("../config/openai");
+const { getOpenAI } = require("../config/openai");
 const {
   appendMessages,
   clearSession,
@@ -66,6 +66,8 @@ function getTextContent(message) {
 }
 
 async function createCompletion(messages, allowWebSearch) {
+  const openai = getOpenAI();
+
   return openai.chat.completions.create({
     model: CHAT_MODEL,
     temperature: 0.8,

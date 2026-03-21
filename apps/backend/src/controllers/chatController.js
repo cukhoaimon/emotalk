@@ -1,6 +1,7 @@
 const { createHttpError } = require("../utils/httpError");
 const { clearSession, getConversation, runConversationTurn } = require("../services/chatService");
 const { parseEmotion } = require("../utils/parseEmotions");
+const { saveAnalysisResult } = require("../services/outputService");
 
 async function chat(req, res, next) {
   try {
@@ -17,14 +18,22 @@ async function chat(req, res, next) {
       userMessage: String(message).trim(),
       systemInstruction:
         "You are a helpful conversational assistant. Answer clearly, remember the prior conversation, and keep continuity with the user's earlier details.",
-      allowWebSearch: true
+      allowWebSearch: false
     });
 
-    res.status(200).json({
+    const payload = {
+      message: String(message).trim(),
       sessionId: result.sessionId,
       emotion,
       reply: result.reply,
       toolEvents: result.toolEvents
+    };
+
+    const output = await saveAnalysisResult(payload);
+
+    res.status(200).json({
+      ...payload,
+      output
     });
   } catch (error) {
     next(error);

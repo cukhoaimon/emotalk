@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
@@ -15,6 +16,7 @@ const corsOrigin = process.env.CORS_ORIGIN
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
+app.use("/outputs", express.static(path.join(__dirname, "..", "outputs")));
 
 app.use(
   rateLimit({
