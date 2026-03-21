@@ -2,9 +2,17 @@ const { randomUUID } = require("crypto");
 
 const sessions = new Map();
 const MAX_MESSAGES = 20;
+const DEFAULT_SESSION_ID = "server-runtime-memory";
 
-function createSession() {
-  const sessionId = randomUUID();
+function resolveSessionId(sessionId) {
+  if (typeof sessionId === "string" && sessionId.trim()) {
+    return sessionId.trim();
+  }
+
+  return DEFAULT_SESSION_ID;
+}
+
+function createSession(sessionId = randomUUID()) {
   const session = {
     sessionId,
     createdAt: new Date().toISOString(),
@@ -18,11 +26,17 @@ function createSession() {
 }
 
 function getOrCreateSession(sessionId) {
-  if (sessionId && sessions.has(sessionId)) {
-    return sessions.get(sessionId);
+  const resolvedSessionId = resolveSessionId(sessionId);
+
+  if (sessions.has(resolvedSessionId)) {
+    return sessions.get(resolvedSessionId);
   }
 
-  return createSession();
+  return createSession(resolvedSessionId);
+}
+
+function hasSession(sessionId) {
+  return sessions.has(resolveSessionId(sessionId));
 }
 
 function appendMessages(sessionId, messages) {
@@ -38,16 +52,18 @@ function appendMessages(sessionId, messages) {
 }
 
 function getSession(sessionId) {
-  return sessions.get(sessionId) || null;
+  return sessions.get(resolveSessionId(sessionId)) || null;
 }
 
 function clearSession(sessionId) {
-  return sessions.delete(sessionId);
+  return sessions.delete(resolveSessionId(sessionId));
 }
 
 module.exports = {
   appendMessages,
   clearSession,
+  DEFAULT_SESSION_ID,
   getOrCreateSession,
+  hasSession,
   getSession
 };

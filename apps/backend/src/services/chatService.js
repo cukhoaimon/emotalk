@@ -1,5 +1,11 @@
 const openai = require("../config/openai");
-const { appendMessages, clearSession, getOrCreateSession, getSession } = require("./conversationStore");
+const {
+  appendMessages,
+  clearSession,
+  getOrCreateSession,
+  getSession,
+  hasSession
+} = require("./conversationStore");
 const { searchWeb } = require("./tinyfishService");
 const { createHttpError } = require("../utils/httpError");
 const { EMOTION_PROMPTS } = require("../config/emotions");
@@ -75,8 +81,16 @@ async function runConversationTurn({
   systemInstruction,
   emotion,
   persist = true,
-  allowWebSearch = false
+  allowWebSearch = false,
+  requireExistingSession = false
 }) {
+  if (requireExistingSession && sessionId && !hasSession(sessionId)) {
+    throw createHttpError(
+      409,
+      "Conversation session expired or was not found. Start a new session and continue from there."
+    );
+  }
+
   const session = getOrCreateSession(sessionId);
   const baseMessages = [
     {

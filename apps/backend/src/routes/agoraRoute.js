@@ -1,10 +1,15 @@
 const express = require("express");
-const { RtcRole, RtcTokenBuilder } = require("agora-token");
+const { RtcRole } = require("agora-token");
+const {
+  buildRtcRtmToken,
+  getAgoraConfig,
+  startConversationalAgent,
+  stopConversationalAgent,
+} = require("../services/conversationalAgentService");
 
 const router = express.Router();
 
 const DEFAULT_CHANNEL = "emotalk";
-const DEFAULT_TOKEN_EXPIRATION_SECONDS = 60 * 60;
 const CHANNEL_PATTERN = /^[A-Za-z0-9 !#$%&()+\-:;<=>.?@[\]^_{|}~,]{1,64}$/;
 const APP_ID_PATTERN = /^[A-Fa-f0-9]{32}$/;
 
@@ -32,7 +37,6 @@ function isTruthyEnv(value) {
 
 router.get("/agora/session", (req, res) => {
   const appId = process.env.AGORA_APP_ID?.trim();
-  const appCertificate = process.env.AGORA_APP_CERTIFICATE?.trim();
   const allowAppIdOnly = isTruthyEnv(process.env.AGORA_ALLOW_APP_ID_ONLY);
 
   if (!appId) {
@@ -57,9 +61,8 @@ router.get("/agora/session", (req, res) => {
 
   const roleName = req.query.role === "debug" ? "debug" : "broadcast";
   const uid = createSessionUid(roleName);
-  const expirationSeconds = Number(
-    process.env.AGORA_TOKEN_EXPIRATION_SECONDS || DEFAULT_TOKEN_EXPIRATION_SECONDS
-  );
+  const appCertificate = process.env.AGORA_APP_CERTIFICATE?.trim();
+  const expirationSeconds = Number(process.env.AGORA_TOKEN_EXPIRATION_SECONDS || 3600);
 
   if (!appCertificate && !allowAppIdOnly) {
     return res.status(500).json({
@@ -72,19 +75,17 @@ router.get("/agora/session", (req, res) => {
   let source = "app-id-only";
 
   if (appCertificate) {
-    const privilegeExpiredTs = Math.floor(Date.now() / 1000) + expirationSeconds;
     const rtcRole =
       roleName === "debug" ? RtcRole.SUBSCRIBER : RtcRole.PUBLISHER;
 
-    token = RtcTokenBuilder.buildTokenWithUserAccount(
+    token = buildRtcRtmToken({
       appId,
       appCertificate,
       channel,
       uid,
-      rtcRole,
-      privilegeExpiredTs,
-      privilegeExpiredTs
-    );
+      role: rtcRole,
+      expirationSeconds,
+    });
     source = "server-generated-token";
   }
 
@@ -94,8 +95,52 @@ router.get("/agora/session", (req, res) => {
     uid,
     token,
     source,
+    useStringUid: true,
     expiresInSeconds: expirationSeconds
   });
+});
+
+router.post("/agora/agent/start", async (req, res, next) => {
+  try {
+    const channel = resolveChannel(req.body.channel);
+    const remoteUid = typeof req.body.uid === "string" ? req.body.uid.trim() : "";
+    const emotion = typeof req.body.emotion === "string" ? req.body.emotion.trim() : "joy";
+
+    if (!CHANNEL_PATTERN.test(channel)) {
+      return res.status(400).json({
+        error: "Channel name is invalid. Use 1-64 supported RTC characters."
+      });
+    }
+
+    if (!remoteUid) {
+      return res.status(400).json({
+        error: "The uid field is required to start an Agora conversational agent."
+      });
+    }
+
+    const response = await startConversationalAgent({
+      channel,
+      remoteUid,
+      emotion,
+    });
+
+    return res.status(200).json(response);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/agora/agent/:agentId/leave", async (req, res, next) => {
+  try {
+    if (!req.params.agentId) {
+      return res.status(400).json({ error: "Missing agentId." });
+    }
+
+    const response = await stopConversationalAgent(req.params.agentId);
+    return res.status(200).json(response || { status: "stopped" });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 module.exports = router;

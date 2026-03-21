@@ -15,12 +15,21 @@ async function analyzeAudioRequest(req, persistOutput) {
   const transcript = await transcribeAudio(req.file.path);
 
   if (!transcript) {
+    if (!persistOutput) {
+      return {
+        ignored: true,
+        reason: "empty_transcript",
+        sessionId: req.body.sessionId || null
+      };
+    }
+
     throw createHttpError(422, "The audio was transcribed, but no text was returned.");
   }
 
   const response = await generateEmotionReply(emotion, transcript, {
     sessionId: req.body.sessionId,
-    persist: true
+    persist: true,
+    requireExistingSession: !persistOutput
   });
   const result = {
     transcript,
@@ -62,6 +71,11 @@ async function analyzeLiveAudio(req, res, next) {
 
   try {
     const result = await analyzeAudioRequest(req, false);
+
+    if (result.ignored) {
+      return res.status(204).send();
+    }
+
     res.status(200).json(result);
   } catch (error) {
     next(error);

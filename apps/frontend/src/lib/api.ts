@@ -6,20 +6,16 @@ export type AgoraSession = {
   token: string | null;
   uid: number | string | null;
   source: string;
+  useStringUid?: boolean;
   expiresInSeconds?: number;
 };
 
-export type AnalysisResponse = {
-  sessionId?: string;
-  transcript: string;
-  emotion: string;
-  reply: string;
-  toolEvents?: Array<unknown>;
-  output?: {
-    directory: string;
-    timestampedFilename: string;
-    latestFilename: string;
-  };
+export type AgoraAgentSession = {
+  agent_id: string;
+  create_ts?: number;
+  status: string;
+  agentUid: string;
+  channel: string;
 };
 
 export type ChatResponse = {
@@ -90,58 +86,41 @@ export async function fetchAgoraSession(
   return (await response.json()) as AgoraSession;
 }
 
-export async function analyzeAudioRecording(
+export async function startAgoraAgent(
   backendBaseUrl: string,
-  file: File,
-  emotion: string,
-  sessionId?: string
-) {
-  const url = new URL("/analyze-audio", backendBaseUrl);
-  const formData = new FormData();
-
-  formData.append("file", file);
-  formData.append("emotion", emotion);
-  if (sessionId) {
-    formData.append("sessionId", sessionId);
+  options: {
+    channel: string;
+    uid: string;
+    emotion: string;
   }
-
+) {
+  const url = new URL("/agora/agent/start", backendBaseUrl);
   const response = await fetch(url.toString(), {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(options),
   });
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
 
-  return (await response.json()) as AnalysisResponse;
+  return (await response.json()) as AgoraAgentSession;
 }
 
-export async function analyzeLiveAudio(
-  backendBaseUrl: string,
-  file: File,
-  emotion: string,
-  sessionId?: string
-) {
-  const url = new URL("/analyze-audio/live", backendBaseUrl);
-  const formData = new FormData();
-
-  formData.append("file", file);
-  formData.append("emotion", emotion);
-  if (sessionId) {
-    formData.append("sessionId", sessionId);
-  }
-
+export async function stopAgoraAgent(backendBaseUrl: string, agentId: string) {
+  const url = new URL(`/agora/agent/${agentId}/leave`, backendBaseUrl);
   const response = await fetch(url.toString(), {
     method: "POST",
-    body: formData,
   });
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
 
-  return (await response.json()) as AnalysisResponse;
+  return (await response.json()) as { status?: string };
 }
 
 export async function sendChatMessage(

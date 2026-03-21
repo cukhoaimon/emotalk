@@ -10,7 +10,8 @@ async function generateEmotionReply(emotion, transcript, options = {}) {
       systemInstruction:
         "You are a voice conversation assistant. Reply in English using 2 to 4 sentences. Sound natural when read aloud and stay clearly consistent with the selected emotion.",
       persist: options.persist,
-      allowWebSearch: false
+      allowWebSearch: false,
+      requireExistingSession: options.requireExistingSession
     });
 
     return {

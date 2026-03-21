@@ -31,6 +31,16 @@ async function chat(req, res, next) {
   }
 }
 
+function getDefaultSession(req, res) {
+  const session = getConversation();
+
+  if (!session) {
+    return res.status(404).json({ error: "Session not found." });
+  }
+
+  return res.status(200).json(session);
+}
+
 function getSession(req, res) {
   const session = getConversation(req.params.sessionId);
 
@@ -49,6 +59,7 @@ function resetSession(req, res) {
 
 module.exports = {
   chat,
+  getDefaultSession,
   getSession,
   resetSession
 };
