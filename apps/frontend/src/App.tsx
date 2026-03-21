@@ -1,141 +1,36 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
-import AgoraRTC, {
-  IAgoraRTCClient,
-  IAgoraRTCRemoteUser,
-  ICameraVideoTrack,
-  IMicrophoneAudioTrack,
-} from "agora-rtc-sdk-ng";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import AgoraRTC, { IAgoraRTCClient, IAgoraRTCRemoteUser, ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
+import { AnalysisResponse, AgoraSession, AppMode, analyzeLiveAudio, fetchAgoraSession } from "./lib/api";
+import { SUPPORTED_EMOTIONS, SupportedEmotion } from "./lib/emotions";
 
-type AppMode = "broadcast" | "debug";
-type EmotionKey = "joy" | "sad" | "angry" | "calm" | "love";
+type TranscriptEntry = { id: string; createdAt: string; transcript: string; emotion: SupportedEmotion };
+type EmotionConfig = { key: SupportedEmotion; title: string; mood: string; emoji: string; accent: string; glow: string; description: string };
 
-type AgoraSession = {
-  appId: string;
-  channel: string;
-  token: string | null;
-  uid: number | string | null;
-  source: string;
-  expiresInSeconds?: number;
-};
-
-type RecordingItem = {
-  id: string;
-  createdAt: string;
-  durationSeconds: number;
-  sizeLabel: string;
-  url: string;
-};
-
-type EmotionConfig = {
-  key: EmotionKey;
-  title: string;
-  mood: string;
-  emoji: string;
-  accent: string;
-  glow: string;
-  description: string;
-};
-
+const LIVE_CHUNK_DURATION_MS = 6000;
+const LIVE_CHUNK_GAP_MS = 350;
+const MIN_ANALYSIS_BLOB_SIZE_BYTES = 2048;
 const EMOTIONS: EmotionConfig[] = [
-  {
-    key: "joy",
-    title: "Joy",
-    mood: "Shimmer mode",
-    emoji: "^_^",
-    accent: "linear-gradient(135deg, #ff8fd8 0%, #c084fc 45%, #60a5fa 100%)",
-    glow: "rgba(244, 114, 182, 0.42)",
-    description: "Bright, playful energy with a light celebratory pulse.",
-  },
-  {
-    key: "love",
-    title: "Love",
-    mood: "Soft bloom",
-    emoji: "<3",
-    accent: "linear-gradient(135deg, #fb7185 0%, #f472b6 55%, #f9a8d4 100%)",
-    glow: "rgba(251, 113, 133, 0.4)",
-    description: "Warm, affectionate visuals with a dreamy floating rhythm.",
-  },
-  {
-    key: "calm",
-    title: "Calm",
-    mood: "Cloud drift",
-    emoji: "-_-",
-    accent: "linear-gradient(135deg, #7dd3fc 0%, #818cf8 52%, #c4b5fd 100%)",
-    glow: "rgba(125, 211, 252, 0.34)",
-    description: "Steady ambient gradients for a composed and clear state.",
-  },
-  {
-    key: "sad",
-    title: "Sad",
-    mood: "Rain glass",
-    emoji: "T_T",
-    accent: "linear-gradient(135deg, #60a5fa 0%, #6366f1 50%, #8b5cf6 100%)",
-    glow: "rgba(96, 165, 250, 0.35)",
-    description: "Cool, reflective colors with a gentler low-energy atmosphere.",
-  },
-  {
-    key: "angry",
-    title: "Angry",
-    mood: "Hot spark",
-    emoji: ">:(",
-    accent: "linear-gradient(135deg, #fb7185 0%, #f97316 55%, #facc15 100%)",
-    glow: "rgba(249, 115, 22, 0.38)",
-    description: "High-contrast heat and sharp highlights for intense tension.",
-  },
+  { key: "joy", title: "Joy", mood: "Bright Lift", emoji: "^_^", accent: "linear-gradient(135deg, #ff9ccf 0%, #8b5cf6 48%, #60a5fa 100%)", glow: "rgba(244, 114, 182, 0.4)", description: "Warm, optimistic energy for upbeat conversations and supportive responses." },
+  { key: "sadness", title: "Sadness", mood: "Soft Rain", emoji: "T_T", accent: "linear-gradient(135deg, #60a5fa 0%, #4f46e5 52%, #8b5cf6 100%)", glow: "rgba(96, 165, 250, 0.36)", description: "Cool, reflective visuals suited to slower and more empathetic tones." },
+  { key: "anger", title: "Anger", mood: "Heat Pulse", emoji: ">:(", accent: "linear-gradient(135deg, #fb7185 0%, #f97316 55%, #facc15 100%)", glow: "rgba(249, 115, 22, 0.34)", description: "Sharper contrast and hotter highlights for tense moments that need attention." },
+  { key: "fear", title: "Fear", mood: "Night Echo", emoji: "o_o", accent: "linear-gradient(135deg, #2dd4bf 0%, #3b82f6 55%, #6366f1 100%)", glow: "rgba(59, 130, 246, 0.3)", description: "Nervous, alert atmosphere for uncertain or high-stakes emotional states." },
+  { key: "disgust", title: "Disgust", mood: "Acid Drift", emoji: "-_-", accent: "linear-gradient(135deg, #84cc16 0%, #14b8a6 55%, #0ea5e9 100%)", glow: "rgba(20, 184, 166, 0.34)", description: "Tighter, uneasy gradients for moments of discomfort or rejection." },
 ];
-
 const envAppId = import.meta.env.VITE_AGORA_APP_ID ?? "";
 const envChannel = import.meta.env.VITE_AGORA_CHANNEL ?? "emotalk";
 const envToken = import.meta.env.VITE_AGORA_TOKEN ?? null;
 const envUidRaw = import.meta.env.VITE_AGORA_UID;
 const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
 
-function parseEnvUid(rawUid: string | undefined) {
-  if (!rawUid) {
-    return null;
-  }
-
-  const numericUid = Number(rawUid);
-  return Number.isNaN(numericUid) ? rawUid : numericUid;
-}
-
-function getModeFromLocation(): AppMode {
-  const searchParams = new URLSearchParams(window.location.search);
-  return searchParams.get("mode") === "debug" ? "debug" : "broadcast";
-}
-
-function getChannelFromLocation() {
-  const searchParams = new URLSearchParams(window.location.search);
-  return searchParams.get("channel") || envChannel;
-}
-
-function shouldAutoJoin() {
-  const searchParams = new URLSearchParams(window.location.search);
-  return searchParams.get("autojoin") === "1";
-}
-
-function getTimeLabel() {
-  return new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function getSupportedRecordingMimeType() {
-  if (typeof MediaRecorder === "undefined") {
-    return "";
-  }
-
-  const mimeTypes = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm",
-  ];
-
-  return mimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
-}
+function parseEnvUid(rawUid: string | undefined) { if (!rawUid) return null; const numericUid = Number(rawUid); return Number.isNaN(numericUid) ? rawUid : numericUid; }
+function getModeFromLocation(): AppMode { const searchParams = new URLSearchParams(window.location.search); return searchParams.get("mode") === "debug" ? "debug" : "broadcast"; }
+function getChannelFromLocation() { const searchParams = new URLSearchParams(window.location.search); return searchParams.get("channel") || envChannel; }
+function shouldAutoJoin() { const searchParams = new URLSearchParams(window.location.search); return searchParams.get("autojoin") === "1"; }
+function getTimeLabel() { return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+function getSupportedLiveAudioMimeType() { const mimeTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]; return mimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ""; }
+function getLiveAudioExtension(mimeType: string) { return mimeType.includes("mp4") ? "mp4" : "webm"; }
+function getAudioMeterSegments(level: number) { const normalizedLevel = Math.max(0, Math.min(level, 100)); return Array.from({ length: 10 }, (_, index) => normalizedLevel >= (index + 1) * 10); }
+function normalizeTrackVolume(level: number) { return Math.max(0, Math.min(Math.round(level * 100), 100)); }
 
 function formatDuration(totalSeconds: number) {
   const mins = Math.floor(totalSeconds / 60)
@@ -152,40 +47,79 @@ function App() {
   const mode = getModeFromLocation();
   const isDebugMode = mode === "debug";
   const autoJoin = shouldAutoJoin();
-  const client = useMemo<IAgoraRTCClient>(
-    () => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }),
-    [],
-  );
+  const clientState = useMemo<{ client: IAgoraRTCClient | null; clientError: string | null }>(() => {
+    try { return { client: AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }), clientError: null }; }
+    catch (error) { return { client: null, clientError: error instanceof Error ? error.message : "Agora RTC failed to initialize." }; }
+  }, []);
+  const client = clientState.client;
+  const clientError = clientState.clientError;
   const localContainerRef = useRef<HTMLDivElement>(null);
   const remoteContainerRef = useRef<HTMLDivElement>(null);
   const cameraTrackRef = useRef<ICameraVideoTrack | null>(null);
   const micTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recorderStartTimeRef = useRef<number | null>(null);
-  const recordingChunksRef = useRef<Blob[]>([]);
-  const recordingUrlsRef = useRef<string[]>([]);
+  const liveRecorderRef = useRef<MediaRecorder | null>(null);
+  const liveAudioStreamRef = useRef<MediaStream | null>(null);
+  const liveChunkTimeoutRef = useRef<number | null>(null);
+  const liveChunkPartsRef = useRef<Blob[]>([]);
+  const liveLoopEnabledRef = useRef(false);
+  const liveRequestSequenceRef = useRef(0);
   const hasAutoJoinedRef = useRef(false);
+  const selectedEmotionsRef = useRef<SupportedEmotion[]>([]);
+  const previousEmotionKeyRef = useRef("");
+  const joinedRef = useRef(false);
   const [joined, setJoined] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [session, setSession] = useState<AgoraSession | null>(null);
   const [channelInput, setChannelInput] = useState(getChannelFromLocation());
   const [cameraTrack, setCameraTrack] = useState<ICameraVideoTrack | null>(null);
   const [micTrack, setMicTrack] = useState<IMicrophoneAudioTrack | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const [recordings, setRecordings] = useState<RecordingItem[]>([]);
-  const [selectedEmotion, setSelectedEmotion] = useState<EmotionKey>("joy");
+  const [selectedEmotions, setSelectedEmotions] = useState<SupportedEmotion[]>(["joy"]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isListeningLive, setIsListeningLive] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("Join the channel to start live listening.");
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
+  const [transcriptEntries, setTranscriptEntries] = useState<TranscriptEntry[]>([]);
+  const [conversationSessionId, setConversationSessionId] = useState<string | null>(null);
+  const [localAudioLevel, setLocalAudioLevel] = useState(0);
+  const [remoteAudioLevel, setRemoteAudioLevel] = useState(0);
+  const [audioSignalDetected, setAudioSignalDetected] = useState(false);
+  const currentEmotion = EMOTIONS.find((emotion) => emotion.key === (selectedEmotions[0] ?? "joy")) ?? EMOTIONS[0];
+  const localMeterSegments = getAudioMeterSegments(localAudioLevel);
+  const remoteMeterSegments = getAudioMeterSegments(remoteAudioLevel);
+  const micStatus = !joined ? "offline" : !micEnabled ? "muted" : localAudioLevel > 8 ? "speaking" : "live";
+  const remoteAudioStatus = !joined ? "offline" : remoteAudioLevel > 8 ? "receiving" : "idle";
+  const combinedError = connectionError || analysisError || clientError;
 
-  const currentEmotion = useMemo(
-    () => EMOTIONS.find((emotion) => emotion.key === selectedEmotion) ?? EMOTIONS[0],
-    [selectedEmotion],
-  );
-
-  const appendLog = (message: string) => {
-    setLogs((currentLogs) => [`${getTimeLabel()}  ${message}`, ...currentLogs].slice(0, 14));
+  const appendLog = (message: string) => setLogs((currentLogs) => [`${getTimeLabel()}  ${message}`, ...currentLogs].slice(0, 18));
+  const renderEmptyState = (container: HTMLDivElement | null, title: string, message: string, accentClass = "") => {
+    if (!container) return;
+    container.innerHTML = "";
+    const emptyState = document.createElement("div");
+    emptyState.className = `video-placeholder ${accentClass}`.trim();
+    emptyState.innerHTML = `<strong>${title}</strong><p>${message}</p>`;
+    container.appendChild(emptyState);
   };
+  const renderLocalPreview = (track: ICameraVideoTrack) => {
+    if (!localContainerRef.current) return;
+    localContainerRef.current.innerHTML = "";
+    const player = document.createElement("div");
+    player.className = "agora-player local-player";
+    localContainerRef.current.appendChild(player);
+    track.play(player);
+  };
+  const clearVideoContainers = () => {
+    renderEmptyState(localContainerRef.current, isDebugMode ? "Viewer mode" : "Local preview", isDebugMode ? "This tab subscribes only. Open the main screen to publish camera and microphone." : "Join the room to preview your own published camera.");
+    renderEmptyState(remoteContainerRef.current, "Remote feed", "When another participant publishes to this channel, their stream appears here.", "remote-placeholder");
+  };
+
+  useEffect(() => { clearVideoContainers(); }, [isDebugMode]);
+  useEffect(() => { joinedRef.current = joined; }, [joined]);
+  useEffect(() => { selectedEmotionsRef.current = selectedEmotions; }, [selectedEmotions]);
 
   const renderEmptyState = (container: HTMLDivElement | null, message: string) => {
     if (!container) {
@@ -226,98 +160,83 @@ function App() {
   };
 
   useEffect(() => {
-    const handleUserPublished = async (
-      user: IAgoraRTCRemoteUser,
-      mediaType: "audio" | "video",
-    ) => {
+    if (!client) return;
+    const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: "audio" | "video") => {
       appendLog(`Remote user ${user.uid} published ${mediaType}.`);
       await client.subscribe(user, mediaType);
-
       if (mediaType === "video" && user.videoTrack && remoteContainerRef.current) {
-        remoteContainerRef.current.querySelector(".empty-state")?.remove();
-        let remotePlayer = document.getElementById(`remote-${user.uid}`);
-        if (!remotePlayer) {
-          remotePlayer = document.createElement("div");
-          remotePlayer.id = `remote-${user.uid}`;
-          remotePlayer.className = "video-tile";
-          remoteContainerRef.current.appendChild(remotePlayer);
-        }
-
+        remoteContainerRef.current.innerHTML = "";
+        const remotePlayer = document.createElement("div");
+        remotePlayer.id = `remote-${user.uid}`;
+        remotePlayer.className = "agora-player";
+        remoteContainerRef.current.appendChild(remotePlayer);
         user.videoTrack.play(remotePlayer);
       }
-
-      if (mediaType === "audio" && user.audioTrack) {
-        user.audioTrack.play();
-      }
+      if (mediaType === "audio" && user.audioTrack) user.audioTrack.play();
     };
-
     const removeRemoteUser = (user: IAgoraRTCRemoteUser) => {
       appendLog(`Remote user ${user.uid} left or unpublished.`);
-      const remotePlayer = document.getElementById(`remote-${user.uid}`);
-      if (remotePlayer) {
-        remotePlayer.remove();
-      }
-
-      if (remoteContainerRef.current && !remoteContainerRef.current.querySelector(".video-tile")) {
-        renderEmptyState(remoteContainerRef.current, "No remote tracks connected yet.");
-      }
+      renderEmptyState(remoteContainerRef.current, "Remote feed", "When another participant publishes to this channel, their stream appears here.", "remote-placeholder");
     };
-
-    const handleConnectionStateChange = (currentState: string, previousState: string) => {
-      appendLog(`Connection ${previousState} -> ${currentState}.`);
+    const handleConnectionStateChange = (currentState: string, previousState: string) => appendLog(`Connection ${previousState} -> ${currentState}.`);
+    const handleVolumeIndicator = (volumes: Array<{ uid: number | string; level: number }>) => {
+      const ownUid = session?.uid;
+      const localEntry = volumes.find((entry) => ownUid !== null && ownUid !== undefined && String(entry.uid) === String(ownUid));
+      const remoteLevel = volumes.filter((entry) => ownUid === null || ownUid === undefined || String(entry.uid) !== String(ownUid)).reduce((maxLevel, entry) => Math.max(maxLevel, entry.level), 0);
+      setRemoteAudioLevel(remoteLevel);
+      setAudioSignalDetected((localEntry?.level ?? 0) > 0 || remoteLevel > 0);
     };
-
     client.on("user-published", handleUserPublished);
     client.on("user-unpublished", removeRemoteUser);
     client.on("user-left", removeRemoteUser);
     client.on("connection-state-change", handleConnectionStateChange);
-
+    client.on("volume-indicator", handleVolumeIndicator);
     return () => {
       client.off("user-published", handleUserPublished);
       client.off("user-unpublished", removeRemoteUser);
       client.off("user-left", removeRemoteUser);
       client.off("connection-state-change", handleConnectionStateChange);
+      client.off("volume-indicator", handleVolumeIndicator);
     };
-  }, [client]);
+  }, [client, session?.uid]);
 
   useEffect(() => {
-    clearVideoContainers();
-  }, [isDebugMode]);
-
-  useEffect(() => {
-    if (!isRecording) {
-      return;
-    }
-
+    if (!micTrack || !joined || isDebugMode) return;
     const intervalId = window.setInterval(() => {
-      setRecordingSeconds((value) => value + 1);
-    }, 1000);
-
+      const nextLevel = normalizeTrackVolume(micTrack.getVolumeLevel());
+      setLocalAudioLevel(nextLevel);
+      setAudioSignalDetected((currentDetected) => currentDetected || nextLevel > 0);
+    }, 200);
     return () => window.clearInterval(intervalId);
-  }, [isRecording]);
+  }, [isDebugMode, joined, micTrack]);
 
   useEffect(() => {
-    return () => {
-      if (recorderRef.current && recorderRef.current.state !== "inactive") {
-        recorderRef.current.stop();
-      }
-      recordingUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
-
-  const stopRecording = () => {
-    if (!recorderRef.current) {
+    if (!joined) {
+      setAudioSignalDetected(false);
       return;
     }
+    setAudioSignalDetected(localAudioLevel > 0 || remoteAudioLevel > 0);
+  }, [joined, localAudioLevel, remoteAudioLevel]);
 
-    recorderRef.current.stop();
-    recorderRef.current = null;
-    setIsRecording(false);
-    setRecordingSeconds(0);
-    appendLog("Stopped local debug recording.");
+  const clearLiveAudioStream = () => { liveAudioStreamRef.current?.getTracks().forEach((track) => track.stop()); liveAudioStreamRef.current = null; };
+  const clearLiveChunkTimeout = () => {
+    if (liveChunkTimeoutRef.current !== null) {
+      window.clearTimeout(liveChunkTimeoutRef.current);
+      liveChunkTimeoutRef.current = null;
+    }
   };
-
+  const stopLiveListeningLoop = (statusMessage?: string) => {
+    liveLoopEnabledRef.current = false;
+    clearLiveChunkTimeout();
+    const recorder = liveRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    else { clearLiveAudioStream(); liveRecorderRef.current = null; }
+    liveChunkPartsRef.current = [];
+    setIsListeningLive(false);
+    if (statusMessage) setLiveStatus(statusMessage);
+  };
   const cleanupLocalTracks = () => {
+    stopLiveListeningLoop("Live listening stopped.");
     cameraTrackRef.current?.stop();
     cameraTrackRef.current?.close();
     micTrackRef.current?.stop();
@@ -326,11 +245,99 @@ function App() {
     micTrackRef.current = null;
     setCameraTrack(null);
     setMicTrack(null);
+    setCameraEnabled(false);
+    setMicEnabled(false);
+    setLocalAudioLevel(0);
+    setRemoteAudioLevel(0);
+    setAudioSignalDetected(false);
   };
+
+  const sendLiveAudioChunk = async (audioBlob: Blob, mimeType: string, emotion: SupportedEmotion) => {
+    const chunkId = `${Date.now()}`;
+    const requestId = ++liveRequestSequenceRef.current;
+    const file = new File([audioBlob], `emotalk-live-${chunkId}.${getLiveAudioExtension(mimeType)}`, { type: mimeType });
+    try {
+      setIsAnalyzing(true);
+      setAnalysisError(null);
+      setLiveStatus(`Analyzing live speech for ${emotion}.`);
+      const result = await analyzeLiveAudio(backendBaseUrl, file, emotion, conversationSessionId ?? undefined);
+      if (requestId !== liveRequestSequenceRef.current) return;
+      setConversationSessionId(result.sessionId ?? null);
+      setAnalysisResult(result);
+      setTranscriptEntries((currentEntries) => [{ id: chunkId, createdAt: getTimeLabel(), transcript: result.transcript, emotion }, ...currentEntries].slice(0, 6));
+      appendLog(`Live response updated for ${emotion}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Live audio analysis failed.";
+      setAnalysisError(message);
+      appendLog(`Live analysis failed: ${message}`);
+    } finally {
+      setIsAnalyzing(false);
+      if (!liveLoopEnabledRef.current || !joinedRef.current || selectedEmotionsRef.current.length === 0) {
+        setIsListeningLive(false);
+        return;
+      }
+      window.setTimeout(() => { void startLiveListeningChunk(); }, LIVE_CHUNK_GAP_MS);
+    }
+  };
+
+  async function startLiveListeningChunk() {
+    if (!liveLoopEnabledRef.current || !joinedRef.current || !micTrackRef.current) return;
+    const mimeType = getSupportedLiveAudioMimeType();
+    if (!mimeType) {
+      setAnalysisError("This browser does not support live audio chunk recording for analysis.");
+      stopLiveListeningLoop("Live listening is unavailable in this browser.");
+      return;
+    }
+    const emotions = [...selectedEmotionsRef.current];
+    if (emotions.length === 0) {
+      stopLiveListeningLoop("Pick at least one emotion to start live listening.");
+      return;
+    }
+    clearLiveAudioStream();
+    liveChunkPartsRef.current = [];
+    const audioStream = new MediaStream([micTrackRef.current.getMediaStreamTrack().clone()]);
+    const recorder = new MediaRecorder(audioStream, { mimeType });
+    liveAudioStreamRef.current = audioStream;
+    liveRecorderRef.current = recorder;
+    setIsListeningLive(true);
+    setLiveStatus(`Listening live for ${emotions.join(", ")}.`);
+    recorder.ondataavailable = (event) => { if (event.data.size > 0) liveChunkPartsRef.current.push(event.data); };
+    recorder.onerror = () => {
+      setAnalysisError("MediaRecorder failed during live listening.");
+      stopLiveListeningLoop("Live listening stopped after a recorder error.");
+    };
+    recorder.onstop = () => {
+      clearLiveChunkTimeout();
+      const parts = liveChunkPartsRef.current;
+      liveChunkPartsRef.current = [];
+      liveRecorderRef.current = null;
+      clearLiveAudioStream();
+      if (!liveLoopEnabledRef.current || !joinedRef.current) {
+        setIsListeningLive(false);
+        return;
+      }
+      const nextEmotion = selectedEmotionsRef.current[0];
+      const audioBlob = new Blob(parts, { type: mimeType });
+      if (audioBlob.size < MIN_ANALYSIS_BLOB_SIZE_BYTES) {
+        setLiveStatus("Listening for speech...");
+        window.setTimeout(() => { void startLiveListeningChunk(); }, LIVE_CHUNK_GAP_MS);
+        return;
+      }
+      if (!nextEmotion) {
+        stopLiveListeningLoop("Pick at least one emotion to start live listening.");
+        return;
+      }
+      void sendLiveAudioChunk(audioBlob, mimeType, nextEmotion);
+    };
+    recorder.start();
+    liveChunkTimeoutRef.current = window.setTimeout(() => {
+      if (recorder.state !== "inactive") recorder.stop();
+    }, LIVE_CHUNK_DURATION_MS);
+  }
 
   const leaveChannel = async () => {
     try {
-      stopRecording();
+      if (!client) throw new Error(clientError || "Agora RTC client is unavailable.");
       cleanupLocalTracks();
       clearVideoContainers();
       await client.leave();
@@ -339,164 +346,129 @@ function App() {
       appendLog("Left the Agora channel.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to leave channel.";
-      setError(message);
+      setConnectionError(message);
     }
   };
 
   useEffect(() => {
-    return () => {
-      void leaveChannel();
-    };
+    return () => { void leaveChannel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resolveSession = async (requestedMode: AppMode, channelName: string) => {
-    const url = new URL("/agora/session", backendBaseUrl);
-    url.searchParams.set("channel", channelName);
-    url.searchParams.set("role", requestedMode);
-
-    try {
-      const response = await fetch(url.toString());
-
-      if (response.ok) {
-        const payload = (await response.json()) as AgoraSession;
-        return payload;
-      }
-    } catch {
-      appendLog("Backend session endpoint unavailable, falling back to frontend env.");
+    try { return await fetchAgoraSession(backendBaseUrl, requestedMode, channelName); }
+    catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : "Request to backend session endpoint failed.";
+      appendLog(`Backend session endpoint failed: ${message}`);
+      appendLog("Falling back to frontend Agora env values.");
     }
-
-    if (!envAppId) {
-      throw new Error(
-        "Missing Agora config. Set AGORA_APP_ID on the backend or VITE_AGORA_APP_ID in the frontend.",
-      );
-    }
-
-    return {
-      appId: envAppId,
-      channel: channelName,
-      token: envToken,
-      uid: parseEnvUid(envUidRaw),
-      source: "frontend-env",
-    } satisfies AgoraSession;
+    if (!envAppId) throw new Error("Missing Agora config. Set AGORA_APP_ID on the backend or VITE_AGORA_APP_ID in the frontend.");
+    return { appId: envAppId, channel: channelName, token: envToken, uid: parseEnvUid(envUidRaw), source: "frontend-env" } satisfies AgoraSession;
   };
 
   const joinChannel = async () => {
-    if (connecting || joined) {
-      return;
-    }
-
+    if (connecting || joined) return;
     try {
+      if (!client) throw new Error(clientError || "Agora RTC client is unavailable.");
       setConnecting(true);
-      setError(null);
-
+      setConnectionError(null);
+      setAnalysisError(null);
       const nextSession = await resolveSession(mode, channelInput.trim() || envChannel);
-      const joinedUid = await client.join(
-        nextSession.appId,
-        nextSession.channel,
-        nextSession.token,
-        nextSession.uid,
-      );
-
+      appendLog(`Using Agora session from ${nextSession.source}.`);
+      client.enableAudioVolumeIndicator();
+      const joinedUid = await client.join(nextSession.appId, nextSession.channel, nextSession.token, nextSession.uid);
       if (isDebugMode) {
-        appendLog(`Joined debug viewer for channel ${nextSession.channel} as ${joinedUid}.`);
         setSession({ ...nextSession, uid: joinedUid });
         setJoined(true);
+        appendLog(`Joined debug viewer for channel ${nextSession.channel} as ${joinedUid}.`);
         return;
       }
-
       const [microphoneTrack, nextCameraTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
-
       micTrackRef.current = microphoneTrack;
       cameraTrackRef.current = nextCameraTrack;
       setMicTrack(microphoneTrack);
       setCameraTrack(nextCameraTrack);
-
+      setMicEnabled(microphoneTrack.enabled);
+      setCameraEnabled(nextCameraTrack.enabled);
       await client.publish([microphoneTrack, nextCameraTrack]);
-      renderLocalVideo(nextCameraTrack);
-
+      renderLocalPreview(nextCameraTrack);
       setSession({ ...nextSession, uid: joinedUid });
       setJoined(true);
+      setTranscriptEntries([]);
+      setAnalysisResult(null);
+      setConversationSessionId(null);
       appendLog(`Publishing mic + camera to channel ${nextSession.channel} as ${joinedUid}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to join channel.";
-      setError(message);
+      setConnectionError(message);
     } finally {
       setConnecting(false);
     }
   };
 
   useEffect(() => {
-    if (!isDebugMode || !autoJoin || hasAutoJoinedRef.current) {
-      return;
-    }
-
+    if (!isDebugMode || !autoJoin || hasAutoJoinedRef.current) return;
     hasAutoJoinedRef.current = true;
     void joinChannel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoJoin, isDebugMode]);
 
-  const startRecording = () => {
-    if (!cameraTrackRef.current || !micTrackRef.current) {
-      setError("Join and publish before starting a local recording.");
+  useEffect(() => {
+    if (isDebugMode) return;
+    if (!joined || !micTrackRef.current) {
+      setIsListeningLive(false);
+      setLiveStatus("Join the channel to start live listening.");
       return;
     }
-
-    const mimeType = getSupportedRecordingMimeType();
-    if (!mimeType) {
-      setError("This browser does not support WebM recording for the debug capture.");
+    if (selectedEmotions.length === 0) {
+      stopLiveListeningLoop("Pick at least one emotion to start live listening.");
       return;
     }
+    if (liveLoopEnabledRef.current) return;
+    liveLoopEnabledRef.current = true;
+    setAnalysisError(null);
+    setLiveStatus(`Listening live for ${selectedEmotions.join(", ")}.`);
+    appendLog(`Live listening started for ${selectedEmotions.join(", ")}.`);
+    void startLiveListeningChunk();
+  }, [isDebugMode, joined, selectedEmotions.length]);
 
-    const recordingStream = new MediaStream([
-      cameraTrackRef.current.getMediaStreamTrack().clone(),
-      micTrackRef.current.getMediaStreamTrack().clone(),
-    ]);
+  useEffect(() => {
+    const emotionKey = selectedEmotions.join(",");
+    if (emotionKey === previousEmotionKeyRef.current) return;
+    previousEmotionKeyRef.current = emotionKey;
+    if (isDebugMode) return;
+    if (selectedEmotions.length === 0) {
+      setLiveStatus(joined ? "Pick at least one emotion to start live listening." : "Join the channel to start live listening.");
+      return;
+    }
+    if (joined) {
+      appendLog(`Live emotions updated: ${selectedEmotions.join(", ")}.`);
+      setLiveStatus(`Listening live for ${selectedEmotions.join(", ")}.`);
+    }
+  }, [isDebugMode, joined, selectedEmotions]);
 
-    recordingChunksRef.current = [];
-    recorderStartTimeRef.current = Date.now();
+  const toggleCamera = async () => {
+    if (!cameraTrackRef.current) {
+      setConnectionError("Join the channel before toggling the camera.");
+      return;
+    }
+    const nextEnabled = !cameraTrackRef.current.enabled;
+    await cameraTrackRef.current.setEnabled(nextEnabled);
+    setCameraEnabled(nextEnabled);
+    appendLog(nextEnabled ? "Camera enabled." : "Camera disabled.");
+    if (nextEnabled) renderLocalPreview(cameraTrackRef.current);
+    else renderEmptyState(localContainerRef.current, "Camera off", "Turn the camera back on to resume the local preview.");
+  };
 
-    const recorder = new MediaRecorder(recordingStream, { mimeType });
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordingChunksRef.current.push(event.data);
-      }
-    };
-    recorder.onstop = () => {
-      const recordingBlob = new Blob(recordingChunksRef.current, { type: mimeType });
-      const durationMs = Math.max(Date.now() - (recorderStartTimeRef.current ?? Date.now()), 0);
-      const url = URL.createObjectURL(recordingBlob);
-      const nextRecording: RecordingItem = {
-        id: `${Date.now()}`,
-        createdAt: new Date().toLocaleString(),
-        durationSeconds: Number((durationMs / 1000).toFixed(1)),
-        sizeLabel: `${(recordingBlob.size / (1024 * 1024)).toFixed(2)} MB`,
-        url,
-      };
-
-      recordingUrlsRef.current = [url, ...recordingUrlsRef.current];
-      setRecordings((currentRecordings) => {
-        const nextRecordings = [nextRecording, ...currentRecordings];
-        const overflow = nextRecordings.slice(5);
-
-        overflow.forEach((recording) => {
-          URL.revokeObjectURL(recording.url);
-          recordingUrlsRef.current = recordingUrlsRef.current.filter(
-            (currentUrl) => currentUrl !== recording.url,
-          );
-        });
-
-        return nextRecordings.slice(0, 5);
-      });
-      recordingStream.getTracks().forEach((track) => track.stop());
-      setRecordingSeconds(0);
-    };
-
-    recorder.start(1000);
-    recorderRef.current = recorder;
-    setIsRecording(true);
-    setRecordingSeconds(0);
-    appendLog("Started local debug recording.");
+  const toggleMic = async () => {
+    if (!micTrackRef.current) {
+      setConnectionError("Join the channel before toggling the microphone.");
+      return;
+    }
+    const nextEnabled = !micTrackRef.current.enabled;
+    await micTrackRef.current.setEnabled(nextEnabled);
+    setMicEnabled(nextEnabled);
+    appendLog(nextEnabled ? "Microphone enabled." : "Microphone muted.");
   };
 
   const openDebugViewer = () => {
@@ -507,228 +479,117 @@ function App() {
     window.open(debugUrl.toString(), "_blank", "noopener,noreferrer");
   };
 
-  const localStateLabel = cameraTrack ? "Live" : joined ? "Ready" : "Idle";
-  const emotionStyle: CSSProperties = {
-    ["--emotion-accent" as string]: currentEmotion.accent,
-    ["--emotion-glow" as string]: currentEmotion.glow,
+  const toggleEmotion = (emotion: SupportedEmotion) => {
+    setAnalysisError(null);
+    setSelectedEmotions((currentEmotions) => {
+      if (currentEmotions.includes(emotion)) return currentEmotions.filter((currentEmotion) => currentEmotion !== emotion);
+      if (currentEmotions.length >= 3) {
+        setAnalysisError("Choose up to 3 emotions at a time.");
+        return currentEmotions;
+      }
+      return [...currentEmotions, emotion];
+    });
   };
 
   return (
     <main className="app-shell">
       <section className="hero-bar">
         <div className="hero-copy-block">
-          <p className="eyebrow">EmoTalk</p>
-          <h1>{isDebugMode ? "Emotion Debug Viewer" : "Unicorn Call Studio"}</h1>
-          <p className="hero-copy">
-            {isDebugMode
-              ? "Monitor the Agora channel in a separate viewer while preserving the PR's emotion-driven stage design."
-              : "Publish mic and camera to Agora, keep local debug recordings, and drive the right stage with the selected emotion mood."}
-          </p>
-        </div>
-
-        <div className="call-summary four-up">
-          <div className="summary-pill">
-            <span>Mode</span>
-            <strong>{mode}</strong>
-          </div>
-          <div className="summary-pill">
-            <span>Status</span>
-            <strong>{joined ? "Joined" : connecting ? "Connecting" : "Idle"}</strong>
-          </div>
-          <div className="summary-pill">
-            <span>Camera</span>
-            <strong>{localStateLabel}</strong>
-          </div>
-          <div className={`summary-pill ${isRecording ? "recording" : ""}`}>
-            <span>Recorder</span>
-            <strong>{isRecording ? formatDuration(recordingSeconds) : "Standby"}</strong>
-          </div>
+          <p className="eyebrow">{isDebugMode ? "Support View" : "Emotion Call"}</p>
+          <h1>{isDebugMode ? "Realtime Viewer" : "Emotion Call Studio"}</h1>
+          <p className="hero-copy">{isDebugMode ? "Monitor a live Agora session in a clean viewer layout and confirm what another participant is publishing." : "Join once, keep talking naturally, and let the app continuously transcribe live speech into emotion-shaped replies."}</p>
         </div>
       </section>
-
       <section className="meet-shell">
         <div className="stage-grid">
-          <article className="call-tile user-tile">
+          <article className="call-tile">
             <div className="tile-topbar">
-              <span className="tile-label">{isDebugMode ? "Remote feed" : "You"}</span>
-              <span className="tile-badge">{isDebugMode ? "Agora viewer" : "Face camera"}</span>
+              <div><span className="tile-label">You</span><strong className="tile-title">{isDebugMode ? "Viewer standby" : "Your camera preview"}</strong></div>
+              <span className="tile-badge">{cameraEnabled ? "Camera live" : "Camera idle"}</span>
             </div>
-
-            <div className="video-stage">
-              <div
-                ref={isDebugMode ? remoteContainerRef : localContainerRef}
-                className="video-stack embedded-stack empty-aware"
-              />
-              {!joined ? (
-                <div className="video-fallback overlay-fallback">
-                  <div className="avatar-core">E</div>
-                  <p>{isDebugMode ? "Join to watch the remote feed" : "Join and publish to start camera preview"}</p>
-                </div>
-              ) : null}
-              <div className="video-overlay">
-                <span>{isDebugMode ? `Channel ${channelInput || envChannel}` : `Mic ${micTrack ? "live" : "muted"}`}</span>
-                <strong>{isDebugMode ? "Remote monitor" : cameraTrack ? "Camera live" : "Camera offline"}</strong>
-              </div>
+            <div ref={localContainerRef} className="video-stage" />
+            <div className="video-overlay"><span>{joined ? "Ready for your call" : "Camera preview will appear here after joining"}</span><strong>{micEnabled ? "Microphone on" : "Microphone off"}</strong></div>
+            <div className="audio-meter-card">
+              <div className="audio-meter-header"><span>Voice Activity</span><strong>{micStatus === "speaking" ? "Speaking" : micEnabled ? "Listening" : "Muted"}</strong></div>
+              <div className="audio-meter-bars" aria-label={`Local microphone level ${localAudioLevel}`}>{localMeterSegments.map((active, index) => <span key={`local-meter-${index}`} className={active ? "audio-meter-bar active" : "audio-meter-bar"} />)}</div>
             </div>
           </article>
-
-          <article className="call-tile emotion-tile" style={emotionStyle}>
+          <article className="call-tile">
             <div className="tile-topbar">
-              <span className="tile-label">Emotion view</span>
-              <span className="tile-badge active">{currentEmotion.title}</span>
+              <div><span className="tile-label">Remote Feed</span><strong className="tile-title">What the other side publishes</strong></div>
+              <span className={remoteAudioLevel > 8 ? "tile-badge active" : "tile-badge"}>{remoteAudioStatus}</span>
             </div>
-
-            <div className="emotion-stage">
-              <div className="emotion-orb orb-one" />
-              <div className="emotion-orb orb-two" />
-              <div className="emotion-orb orb-three" />
-              <div className="emotion-card">
-                <span className="emotion-mode">{currentEmotion.mood}</span>
-                <strong>{currentEmotion.title}</strong>
-                <div className="emotion-face">{currentEmotion.emoji}</div>
-                <p>{currentEmotion.description}</p>
-              </div>
+            <div ref={remoteContainerRef} className="video-stage remote-stage" />
+            <div className="video-overlay"><span>{joined ? "Subscribed to remote participants in this room" : "Join to start receiving remote media"}</span><strong>{audioSignalDetected ? "Signal detected" : "Waiting for signal"}</strong></div>
+            <div className="audio-meter-card">
+              <div className="audio-meter-header"><span>Remote Audio</span><strong>{remoteAudioStatus === "receiving" ? "Receiving" : "Idle"}</strong></div>
+              <div className="audio-meter-bars" aria-label={`Remote audio level ${remoteAudioLevel}`}>{remoteMeterSegments.map((active, index) => <span key={`remote-meter-${index}`} className={active ? "audio-meter-bar active remote" : "audio-meter-bar"} />)}</div>
             </div>
           </article>
         </div>
-
         <aside className="control-rail">
-          <section className="panel controls-panel">
-            <div className="panel-header stacked-header">
-              <div>
-                <p className="eyebrow">Session</p>
-                <h2>Agora controls</h2>
-              </div>
-              <span className="tile-badge active">{session?.source ?? "not connected"}</span>
+          <section className="panel">
+            <div className="panel-header"><div><p className="eyebrow">Call Setup</p><h2>{isDebugMode ? "Viewer controls" : "Setup your call"}</h2></div></div>
+            <label className="field"><span>Room name</span><input value={channelInput} onChange={(event) => setChannelInput(event.target.value)} disabled={joined || connecting} /></label>
+            <div className="control-row">
+              <button type="button" className="control-chip selected" onClick={joinChannel} disabled={joined || connecting}>{connecting ? "Connecting..." : isDebugMode ? "Join viewer" : "Join call"}</button>
+              <button type="button" className="control-chip" onClick={() => void leaveChannel()} disabled={!joined && !connecting}>Leave call</button>
             </div>
-
-            <label className="field">
-              <span>Channel</span>
-              <input
-                value={channelInput}
-                onChange={(event) => setChannelInput(event.target.value)}
-                disabled={joined || connecting}
-              />
-            </label>
-
-            <div className="control-row split-actions">
-              <button type="button" className="control-chip active" onClick={joinChannel} disabled={joined || connecting}>
-                {connecting ? "Connecting..." : isDebugMode ? "Join debug" : "Join & publish"}
-              </button>
-              <button type="button" className="control-chip" onClick={() => void leaveChannel()} disabled={!joined && !connecting}>
-                Leave channel
-              </button>
-              {!isDebugMode ? (
-                <button type="button" className="control-chip" onClick={openDebugViewer}>
-                  Open debug tab
-                </button>
-              ) : null}
-            </div>
-
-            <div className="status-card">
-              <span className="status-dot" />
-              <p>
-                {error
-                  ? error
-                  : joined
-                    ? `Connected to ${session?.channel ?? channelInput} as ${String(session?.uid ?? "-")}.`
-                    : "Ready to request an Agora session and join the selected channel."}
-              </p>
-            </div>
+            {!isDebugMode ? <><div className="control-row">
+              <button type="button" className={cameraEnabled ? "control-chip active" : "control-chip"} onClick={() => void toggleCamera()} disabled={!cameraTrack}>{cameraEnabled ? "Turn camera off" : "Turn camera on"}</button>
+              <button type="button" className={micEnabled ? "control-chip active" : "control-chip"} onClick={() => void toggleMic()} disabled={!micTrack}>{micEnabled ? "Mute microphone" : "Enable microphone"}</button>
+            </div><button type="button" className="control-chip" onClick={openDebugViewer}>Open debug tab</button></> : null}
+            <dl className="meta-grid">
+              <div><dt>Mode</dt><dd>{mode}</dd></div>
+              <div><dt>Status</dt><dd>{joined ? "joined" : "idle"}</dd></div>
+              <div><dt>Session source</dt><dd>{session?.source ?? "not connected yet"}</dd></div>
+              <div><dt>UID</dt><dd>{String(session?.uid ?? "-")}</dd></div>
+            </dl>
+            <div className="status-card"><span className={`status-dot ${combinedError ? "danger" : ""}`} /><p>{combinedError ? combinedError : joined ? `You are in ${session?.channel}. Live listening is ${isListeningLive ? "running" : "ready"} for ${selectedEmotions.join(", ")}.` : "Enter a room name, pick up to three emotions, and join when you are ready."}</p></div>
           </section>
-
-          <section className="panel emotion-panel">
-            <div className="panel-header stacked-header">
-              <div>
-                <p className="eyebrow">Emotion picker</p>
-                <h2>Select visual mood</h2>
-              </div>
-            </div>
-
-            <div className="emotion-picker-grid">
-              {EMOTIONS.map((emotion) => (
-                <button
-                  key={emotion.key}
-                  type="button"
-                  className={selectedEmotion === emotion.key ? "emotion-option selected" : "emotion-option"}
-                  onClick={() => setSelectedEmotion(emotion.key)}
-                >
-                  <span>{emotion.title}</span>
-                  <small>{emotion.mood}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {!isDebugMode ? (
-            <section className="panel recorder-panel">
-              <div className="panel-header stacked-header">
-                <div>
-                  <p className="eyebrow">Voice capture</p>
-                  <h2>Local recording preview</h2>
+          {!isDebugMode ? <>
+            <section className="panel">
+              <div className="panel-header"><div><p className="eyebrow">Emotion Layer</p><h2>{currentEmotion.title}</h2></div><span className="tile-badge active">{isAnalyzing ? "Responding" : liveStatus}</span></div>
+              <div className="emotion-preview" style={{ ["--emotion-accent" as string]: currentEmotion.accent, ["--emotion-glow" as string]: currentEmotion.glow } as CSSProperties}>
+                <div className="emotion-orb orb-one" />
+                <div className="emotion-orb orb-two" />
+                <div className="emotion-card">
+                  <span className="emotion-mode">{currentEmotion.mood}</span>
+                  <strong>{currentEmotion.title}</strong>
+                  <div className="emotion-face">{currentEmotion.emoji}</div>
+                  <p>{currentEmotion.description}</p>
                 </div>
               </div>
-
-              <div className="control-row split-actions compact-actions">
-                <button type="button" className="control-chip active" onClick={startRecording} disabled={!joined || isRecording}>
-                  Start recording
-                </button>
-                <button type="button" className="control-chip" onClick={stopRecording} disabled={!isRecording}>
-                  Stop recording
-                </button>
+              <div className="emotion-picker-grid emotion-picker-grid-tile">
+                {SUPPORTED_EMOTIONS.map((emotion) => {
+                  const config = EMOTIONS.find((entry) => entry.key === emotion) ?? EMOTIONS[0];
+                  const selected = selectedEmotions.includes(emotion);
+                  return <button key={emotion} type="button" className={selected ? "emotion-option selected" : "emotion-option"} onClick={() => toggleEmotion(emotion)}><span>{config.title}</span><small>{config.mood}</small></button>;
+                })}
               </div>
-
-              {recordings.length > 0 ? (
-                <div className="recording-list compact-list">
-                  {recordings.map((recording) => (
-                    <article key={recording.id} className="recording-card">
-                      <div className="recording-meta">
-                        <strong>{recording.createdAt}</strong>
-                        <span>
-                          {recording.durationSeconds}s · {recording.sizeLabel}
-                        </span>
-                      </div>
-                      <video controls src={recording.url} className="recording-preview" />
-                      <a href={recording.url} download={`emotalk-debug-${recording.id}.webm`}>
-                        Download clip
-                      </a>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="recorder-empty">Browser-only debug captures will appear here after you stop a recording.</div>
-              )}
             </section>
-          ) : (
-            <section className="panel recorder-panel">
-              <div className="panel-header stacked-header">
-                <div>
-                  <p className="eyebrow">Debug mode</p>
-                  <h2>Viewer notes</h2>
-                </div>
-              </div>
-              <div className="recorder-empty">The main stage is already subscribed to the remote Agora feed. Use the event log below to verify joins, publishes, and connection changes.</div>
+            <section className="panel">
+              <div className="panel-header"><div><p className="eyebrow">Live Response</p><h2>Latest AI output</h2></div></div>
+              {analysisResult ? <div className="stack-panel">
+                <article className="analysis-card analysis-card-wide"><p className="eyebrow">Transcript</p><p className="transcript">{analysisResult.transcript}</p></article>
+                <article className="analysis-card"><p className="eyebrow">{analysisResult.emotion}</p><p className="analysis-response">{analysisResult.reply}</p></article>
+              </div> : <p className="empty-copy">No live transcript yet. Join the room and start speaking.</p>}
             </section>
-          )}
-
-          <section className="panel log-panel">
-            <div className="panel-header stacked-header">
-              <div>
-                <p className="eyebrow">Debug log</p>
-                <h2>Recent events</h2>
+            <section className="panel">
+              <div className="panel-header"><div><p className="eyebrow">Transcript Chunks</p><h2>Recent segments</h2></div></div>
+              <div className="timeline-list">
+                {transcriptEntries.length === 0 ? <p className="empty-copy">No live chunks processed yet.</p> : transcriptEntries.map((entry) => (
+                  <article key={entry.id} className="timeline-card">
+                    <div className="timeline-meta"><strong>{entry.createdAt}</strong><span>{entry.emotion}</span></div>
+                    <p className="timeline-text">{entry.transcript}</p>
+                  </article>
+                ))}
               </div>
-            </div>
-            <div className="log-list compact-list">
-              {logs.length === 0 ? (
-                <p className="muted">No events yet.</p>
-              ) : (
-                logs.map((entry) => (
-                  <p key={entry} className="log-entry">
-                    {entry}
-                  </p>
-                ))
-              )}
-            </div>
+            </section>
+          </> : null}
+          <section className="panel">
+            <div className="panel-header"><div><p className="eyebrow">Debug Log</p><h2>Session events</h2></div></div>
+            <div className="log-list">{logs.length === 0 ? <p className="empty-copy">No events yet.</p> : logs.map((entry) => <p key={entry} className="log-entry">{entry}</p>)}</div>
           </section>
         </aside>
       </section>

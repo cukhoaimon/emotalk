@@ -1,11 +1,21 @@
 const OpenAI = require("openai");
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is missing. Add it to your .env file.");
+let openaiClient = null;
+
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is missing. Add it to your .env file.");
+  }
+
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+
+  return openaiClient;
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-module.exports = openai;
+module.exports = {
+  getOpenAI
+};

@@ -15,10 +15,12 @@ const allowedMimeTypes = new Set([
   "video/mp4",
   "audio/mp4",
   "audio/mpeg4",
-  "audio/x-m4a"
+  "audio/x-m4a",
+  "audio/webm",
+  "video/webm"
 ]);
 
-const allowedExtensions = new Set([".wav", ".mp4", ".m4a"]);
+const allowedExtensions = new Set([".wav", ".mp4", ".m4a", ".webm"]);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -36,7 +38,9 @@ const fileFilter = (req, file, cb) => {
   const extensionAllowed = allowedExtensions.has(extension);
 
   if (!mimeTypeAllowed || !extensionAllowed) {
-    const error = new Error("Invalid file type. Only .wav, .mp4, and .m4a files are supported.");
+    const error = new Error(
+      "Invalid file type. Only .wav, .mp4, .m4a, and .webm files are supported."
+    );
     error.statusCode = 400;
     return cb(error);
   }

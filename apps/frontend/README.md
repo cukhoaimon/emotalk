@@ -1,6 +1,6 @@
 # Frontend
 
-Vite + React frontend with Agora RTC Web SDK.
+Vite + React frontend with Agora RTC Web SDK and backend-driven audio analysis.
 
 ## Setup
 
@@ -23,4 +23,8 @@ Use **Join & Publish** to capture local mic/camera and send it to Agora.
 
 Use **Open Debug Tab** to open a second viewer tab that subscribes to the same channel for a remote sanity check.
 
-Use **Start Recording** to keep a temporary browser-local `.webm` recording for debugging.
+Use **Start Recording** to create a temporary browser-local `.webm` clip.
+
+Select up to 3 emotions and use **Analyze Selected Recording** to send the chosen clip to the backend `/analyze-audio` route.
+
+The backend must be running with `OPENAI_API_KEY` configured for transcription and response generation.

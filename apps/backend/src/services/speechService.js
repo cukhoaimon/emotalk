@@ -1,10 +1,11 @@
 const fs = require("fs");
 
-const openai = require("../config/openai");
+const { getOpenAI } = require("../config/openai");
 const { createHttpError } = require("../utils/httpError");
 
 async function transcribeAudio(filePath) {
   try {
+    const openai = getOpenAI();
     const transcript = await openai.audio.transcriptions.create({
       file: fs.createReadStream(filePath),
       model: "gpt-4o-mini-transcribe"

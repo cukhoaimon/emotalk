@@ -1,10 +1,10 @@
 # Audio Emotion Backend
 
-Node.js + Express backend that accepts an uploaded audio file, transcribes it with OpenAI, and returns a conversational AI reply in a selected emotion.
+Node.js + Express backend that accepts uploaded audio, transcribes it, and returns a conversational AI reply in a selected emotion.
 
 ## Features
 
-- Upload `.wav`, `.mp4`, or `.m4a` audio files with `multer`
+- Upload `.wav`, `.mp4`, `.m4a`, or `.webm` audio files with `multer`
 - Validate a single `emotion` value for each conversation turn
 - Transcribe audio with the OpenAI transcription API
 - Generate one conversational reply in the selected emotion
@@ -12,6 +12,7 @@ Node.js + Express backend that accepts an uploaded audio file, transcribes it wi
 - Save each successful result to `outputs/latest-output.json` and a timestamped JSON file
 - Clean modular structure for hackathon-friendly maintenance
 - Reuse the same conversation engine for both voice and text chat
+- Expose a live-audio endpoint for short non-persisted call chunks
 
 ## Project Structure
 
@@ -69,9 +70,19 @@ If `AGORA_APP_CERTIFICATE` is configured, the backend generates a fresh RTC toke
 
 Form-data fields:
 
-- `file`: `.wav`, `.mp4`, or `.m4a` audio file
+- `file`: `.wav`, `.mp4`, `.m4a`, or `.webm` audio file
 - `emotion`: a single emotion such as `joy`
 - `sessionId` (optional): continue an existing conversation session
+
+### `POST /analyze-audio/live`
+
+Form-data fields:
+
+- `file`: short live audio chunk, typically `.webm`
+- `emotion`: a single emotion such as `joy`
+- `sessionId` (optional): continue an existing conversation session
+
+This endpoint skips output persistence so it can be used for live call loops.
 
 ### Example response
 
@@ -90,14 +101,6 @@ Form-data fields:
 }
 ```
 
-## Notes
-
-- Supported emotions: `joy`, `sadness`, `anger`, `fear`, `disgust`
-- Invalid file types, missing emotion, unsupported emotions, and OpenAI API failures return JSON errors
-- Uploaded files are deleted after each request finishes
-- Successful requests also write JSON output files into the `outputs/` folder
-- The Agora session endpoint is intended for the hackathon MVP so multiple local tabs can join the same channel with different identities
-
 ### `POST /chat`
 
 JSON body:
@@ -105,6 +108,15 @@ JSON body:
 - `message`: user text input
 - `emotion`: a single emotion such as `fear`
 - `sessionId` (optional): continue an existing conversation session
+
+## Notes
+
+- Supported emotions: `joy`, `sadness`, `anger`, `fear`, `disgust`
+- Invalid file types, missing emotion, unsupported emotions, and OpenAI API failures return JSON errors
+- Uploaded files are deleted after each request finishes
+- Successful requests also write JSON output files into the `outputs/` folder
+- The Agora session endpoint is intended for the hackathon MVP so multiple local tabs can join the same channel with different identities
+- `.webm` uploads are supported for browser-recorded clips from the frontend
 
 ## Example curl
 

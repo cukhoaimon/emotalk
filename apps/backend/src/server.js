@@ -1,4 +1,17 @@
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+const dotenv = require("dotenv");
+
+const rootEnvPath = path.resolve(__dirname, "..", "..", "..", ".env");
+const localEnvPath = path.resolve(process.cwd(), ".env");
+
+if (fs.existsSync(localEnvPath)) {
+  dotenv.config({ path: localEnvPath });
+} else if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else {
+  dotenv.config();
+}
 
 const app = require("./app");
 
