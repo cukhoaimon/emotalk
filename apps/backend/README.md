@@ -4,7 +4,7 @@ Node.js + Express backend that accepts an uploaded audio file, transcribes it wi
 
 ## Features
 
-- Upload `.wav`, `.mp4`, or `.m4a` audio files with `multer`
+- Upload `.wav`, `.mp4`, `.m4a`, or `.webm` audio/video files with `multer`
 - Validate a JSON `emotions` array with a max of 3 emotions
 - Transcribe audio with the OpenAI transcription API
 - Generate one chat response per emotion in parallel with `Promise.all`
@@ -68,7 +68,7 @@ If `AGORA_APP_CERTIFICATE` is configured, the backend generates a fresh RTC toke
 
 Form-data fields:
 
-- `file`: `.wav`, `.mp4`, or `.m4a` audio file
+- `file`: `.wav`, `.mp4`, `.m4a`, or `.webm` audio/video file
 - `emotions`: JSON string such as `["joy","fear"]`
 
 ### Example response
@@ -101,6 +101,7 @@ Form-data fields:
 - Uploaded files are deleted after each request finishes
 - Successful requests also write JSON output files into the `outputs/` folder
 - The Agora session endpoint is intended for the hackathon MVP so multiple local tabs can join the same channel with different identities
+- `.webm` uploads are supported for browser-recorded clips from the frontend
 
 ## Example curl
 
