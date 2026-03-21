@@ -18,6 +18,47 @@ export type AgoraAgentSession = {
   channel: string;
 };
 
+export type ChatResponse = {
+  sessionId: string;
+  emotion: string;
+  reply: string;
+  toolEvents?: Array<unknown>;
+};
+
+export type AvatarVoiceCatalog = {
+  configured: {
+    default: string | null;
+    joy: string | null;
+    sadness: string | null;
+    anger: string | null;
+    fear: string | null;
+    disgust: string | null;
+  };
+  persisted: {
+    default: string | null;
+    joy: string | null;
+    sadness: string | null;
+    anger: string | null;
+    fear: string | null;
+    disgust: string | null;
+  };
+  fromEnv: {
+    default: string | null;
+    joy: string | null;
+    sadness: string | null;
+    anger: string | null;
+    fear: string | null;
+    disgust: string | null;
+  };
+  voices: Array<{
+    voiceId: string;
+    name: string;
+    category: string;
+  }>;
+};
+
+export type AvatarVoiceMapping = AvatarVoiceCatalog["configured"];
+
 async function getErrorMessage(response: Response) {
   try {
     const payload = (await response.json()) as { error?: string };
@@ -82,36 +123,103 @@ export async function stopAgoraAgent(backendBaseUrl: string, agentId: string) {
   return (await response.json()) as { status?: string };
 }
 
-export type AnalysisResponse = {
-  transcript: string;
-  emotion: string;
-  reply: string;
-  sessionId?: string | null;
-  toolEvents?: unknown[];
-};
-
-export async function analyzeLiveAudio(
+export async function sendChatMessage(
   backendBaseUrl: string,
-  audioFile: File,
+  message: string,
   emotion: string,
   sessionId?: string
-): Promise<AnalysisResponse | null> {
-  const url = new URL("/analyze-audio/live", backendBaseUrl);
-  const formData = new FormData();
-  formData.append("file", audioFile);
-  formData.append("emotion", emotion);
-  if (sessionId) formData.append("sessionId", sessionId);
+) {
+  const url = new URL("/chat", backendBaseUrl);
 
   const response = await fetch(url.toString(), {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message,
+      emotion,
+      sessionId,
+    }),
   });
-
-  if (response.status === 204) return null;
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
 
-  return (await response.json()) as AnalysisResponse;
+  return (await response.json()) as ChatResponse;
+}
+
+export async function clearChatSession(
+  backendBaseUrl: string,
+  sessionId: string
+) {
+  const url = new URL(`/chat/${sessionId}`, backendBaseUrl);
+
+  const response = await fetch(url.toString(), {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+}
+
+export async function requestAvatarSpeech(
+  backendBaseUrl: string,
+  text: string,
+  emotion: string
+) {
+  const url = new URL("/avatar/speech", backendBaseUrl);
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text,
+      emotion,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return await response.blob();
+}
+
+export async function fetchAvatarVoiceCatalog(backendBaseUrl: string) {
+  const url = new URL("/avatar/voices", backendBaseUrl);
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return (await response.json()) as AvatarVoiceCatalog;
+}
+
+export async function saveAvatarVoiceCatalog(
+  backendBaseUrl: string,
+  mapping: AvatarVoiceMapping
+) {
+  const url = new URL("/avatar/voices", backendBaseUrl);
+  const response = await fetch(url.toString(), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mapping }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return (await response.json()) as {
+    saved: AvatarVoiceMapping;
+    catalog: AvatarVoiceCatalog;
+  };
 }
