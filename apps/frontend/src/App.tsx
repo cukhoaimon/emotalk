@@ -11,8 +11,9 @@ import { ConversationalAIAPI, ETranscriptHelperMode, EConversationalAIAPIEvents,
 import type { TStateChangeEvent, TModuleError, ITranscriptHelperItem, IUserTranscription, IAgentTranscription } from "./lib/conversational-ai-api";
 import { EMOTIONS, LIVE_CHUNK_DURATION_MS, LIVE_CHUNK_GAP_MS, MIN_ANALYSIS_BLOB_SIZE_BYTES } from "./lib/constants";
 import { SupportedEmotion, SUPPORTED_EMOTIONS } from "./lib/emotions";
-import { TranscriptEntry } from "./lib/types";
+import { TranscriptEntry, CallSummaryData } from "./lib/types";
 import { EmotionAvatar } from "./components/EmotionAvatar";
+import { CallSummaryScreen } from "./components/CallSummaryScreen";
 
 const envAppId = import.meta.env.VITE_AGORA_APP_ID ?? "";
 const envChannel = import.meta.env.VITE_AGORA_CHANNEL ?? "reflexia";
@@ -147,6 +148,8 @@ function App() {
   const liveLoopEnabledRef = useRef(false);
   const liveRequestSequenceRef = useRef(0);
   const previousEmotionKeyRef = useRef("");
+  const subtitleClearTimeoutRef = useRef<number | null>(null);
+  const finalizedTranscriptIdsRef = useRef<Set<string>>(new Set());
   const avatarSpeechTimeoutRef = useRef<number | null>(null);
   const avatarAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const avatarAudioUrlRef = useRef<string | null>(null);
@@ -155,6 +158,8 @@ function App() {
   const avatarAudioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const avatarAudioMeterIntervalRef = useRef<number | null>(null);
   const avatarResponseTurnIdRef = useRef<number | null>(null);
+  const callStartTimeRef = useRef<number | null>(null);
+  const [callSummary, setCallSummary] = useState<CallSummaryData | null>(null);
   const [joined, setJoined] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -445,6 +450,12 @@ function App() {
   const clearLiveChunkTimeout = () => {
     if (liveChunkTimeoutRef.current !== null) { window.clearTimeout(liveChunkTimeoutRef.current); liveChunkTimeoutRef.current = null; }
   };
+  const clearSubtitleTimeout = () => {
+    if (subtitleClearTimeoutRef.current !== null) {
+      window.clearTimeout(subtitleClearTimeoutRef.current);
+      subtitleClearTimeoutRef.current = null;
+    }
+  };
   const stopLiveListeningLoop = (statusMessage?: string) => {
     liveLoopEnabledRef.current = false;
     clearLiveChunkTimeout();
@@ -456,7 +467,10 @@ function App() {
     if (statusMessage) setLiveStatus(statusMessage);
   };
   const resetAnalysisState = () => {
+    clearSubtitleTimeout();
+    finalizedTranscriptIdsRef.current.clear();
     setTranscriptEntries([]);
+    setLiveSubtitleText("");
     setAnalysisResult(null);
     setConversationSessionId(null);
     setAvatarResponseText("");
@@ -567,6 +581,26 @@ function App() {
   const leaveChannel = async () => {
     try {
       if (!client) throw new Error(clientError || "Agora RTC client is unavailable.");
+
+      if (callStartTimeRef.current && transcriptEntries.length > 0) {
+        const durationSeconds = Math.round((Date.now() - callStartTimeRef.current) / 1000);
+        const emotionBreakdown: Partial<Record<SupportedEmotion, number>> = {};
+        transcriptEntries.forEach((entry) => {
+          emotionBreakdown[entry.emotion] = (emotionBreakdown[entry.emotion] || 0) + 1;
+        });
+
+        const domEmotion = Object.entries(emotionBreakdown).reduce((a, b) => b[1] > a[1] ? b : a, ["", 0]);
+        const dominantEmotion = (domEmotion[0] as SupportedEmotion) || selectedEmotionRef.current || "joy";
+
+        setCallSummary({
+          durationSeconds,
+          entries: [...transcriptEntries],
+          dominantEmotion,
+          emotionBreakdown
+        });
+      }
+      callStartTimeRef.current = null;
+
       stopLiveListeningLoop();
       cleanupLocalTracks();
       clearVideoContainers();
@@ -615,6 +649,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => () => {
+    clearSubtitleTimeout();
     clearAvatarSpeechTimeout();
     stopAvatarAudioPlayback();
   }, []);
@@ -662,6 +697,9 @@ function App() {
       await client.publish([microphoneTrack, nextCameraTrack]);
       setSession({ ...nextSession, uid: joinedUid });
       setJoined(true);
+      if (!isDebugMode) {
+        callStartTimeRef.current = Date.now();
+      }
 
       // Start agent + RTM
       try {
@@ -702,19 +740,27 @@ function App() {
           if (!last) return;
 
           // Always update live subtitle (streaming text while turn is in progress)
+          clearSubtitleTimeout();
           setLiveSubtitleText(last.text ?? "");
 
           // Only add to history when the turn is finalized
           const isFinished = last.status === ETurnStatus.END || last.status === ETurnStatus.INTERRUPTED;
+          const transcriptId = `${last.turn_id}-${last.uid}`;
           if (isFinished && last.text?.trim()) {
-            setTranscriptEntries((prev) =>
-              [{ id: `${last.turn_id}-${last.uid}`, createdAt: getTimeLabel(), transcript: last.text ?? "", emotion: selectedEmotionRef.current }, ...prev].slice(0, 6)
-            );
-            if (last.metadata?.object === "assistant.transcription") {
-              activateAvatarTextResponse(last.text, last.turn_id, last.turn_id !== avatarResponseTurnIdRef.current, null);
+            if (!finalizedTranscriptIdsRef.current.has(transcriptId)) {
+              finalizedTranscriptIdsRef.current.add(transcriptId);
+              setTranscriptEntries((prev) =>
+                [{ id: transcriptId, createdAt: getTimeLabel(), transcript: last.text ?? "", emotion: selectedEmotionRef.current }, ...prev].slice(0, 6)
+              );
+              if (last.metadata?.object === "assistant.transcription") {
+                activateAvatarTextResponse(last.text, last.turn_id, last.turn_id !== avatarResponseTurnIdRef.current, null);
+              }
             }
             // Clear live text after a short delay so final text remains briefly visible
-            setTimeout(() => setLiveSubtitleText(""), 2000);
+            subtitleClearTimeoutRef.current = window.setTimeout(() => {
+              setLiveSubtitleText("");
+              subtitleClearTimeoutRef.current = null;
+            }, 2000);
           }
         });
         convAI.on(EConversationalAIAPIEvents.AGENT_ERROR, (_uid: string, err: TModuleError) => {
@@ -891,6 +937,15 @@ function App() {
       })}
     </div>
   );
+
+  /* ═══════════════════════════════════
+     SUMMARY SCREEN
+     ═══════════════════════════════════ */
+  if (callSummary) {
+    return (
+      <CallSummaryScreen summary={callSummary} onDismiss={() => setCallSummary(null)} />
+    );
+  }
 
   /* ═══════════════════════════════════
      PRE-JOIN SCREEN

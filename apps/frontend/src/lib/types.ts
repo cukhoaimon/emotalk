@@ -18,3 +18,10 @@ export type EmotionConfig = {
   avatarMode?: "canvas" | "image";
   imageSrc?: string;
 };
+
+export type CallSummaryData = {
+  durationSeconds: number;
+  entries: TranscriptEntry[];
+  dominantEmotion: SupportedEmotion;
+  emotionBreakdown: Partial<Record<SupportedEmotion, number>>;
+};
