@@ -10,11 +10,11 @@ export type AgoraSession = {
 };
 
 export type AnalysisResponse = {
+  sessionId?: string;
   transcript: string;
-  responses: Array<{
-    emotion: string;
-    text: string;
-  }>;
+  emotion: string;
+  reply: string;
+  toolEvents?: Array<unknown>;
   output?: {
     directory: string;
     timestampedFilename: string;
@@ -52,13 +52,17 @@ export async function fetchAgoraSession(
 export async function analyzeAudioRecording(
   backendBaseUrl: string,
   file: File,
-  emotions: string[]
+  emotion: string,
+  sessionId?: string
 ) {
   const url = new URL("/analyze-audio", backendBaseUrl);
   const formData = new FormData();
 
   formData.append("file", file);
-  formData.append("emotions", JSON.stringify(emotions));
+  formData.append("emotion", emotion);
+  if (sessionId) {
+    formData.append("sessionId", sessionId);
+  }
 
   const response = await fetch(url.toString(), {
     method: "POST",
@@ -75,13 +79,17 @@ export async function analyzeAudioRecording(
 export async function analyzeLiveAudio(
   backendBaseUrl: string,
   file: File,
-  emotions: string[]
+  emotion: string,
+  sessionId?: string
 ) {
   const url = new URL("/analyze-audio/live", backendBaseUrl);
   const formData = new FormData();
 
   formData.append("file", file);
-  formData.append("emotions", JSON.stringify(emotions));
+  formData.append("emotion", emotion);
+  if (sessionId) {
+    formData.append("sessionId", sessionId);
+  }
 
   const response = await fetch(url.toString(), {
     method: "POST",

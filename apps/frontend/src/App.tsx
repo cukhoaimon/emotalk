@@ -18,7 +18,7 @@ type TranscriptEntry = {
   id: string;
   createdAt: string;
   transcript: string;
-  emotions: SupportedEmotion[];
+  emotion: SupportedEmotion;
 };
 
 const LIVE_CHUNK_DURATION_MS = 6000;
@@ -123,6 +123,7 @@ function App() {
   const [liveStatus, setLiveStatus] = useState("Join the channel to start live listening.");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
   const [transcriptEntries, setTranscriptEntries] = useState<TranscriptEntry[]>([]);
+  const [conversationSessionId, setConversationSessionId] = useState<string | null>(null);
 
   const appendLog = (message: string) => {
     setLogs((currentLogs) => [`${getTimeLabel()}  ${message}`, ...currentLogs].slice(0, 18));
@@ -281,13 +282,8 @@ function App() {
   const sendLiveAudioChunk = async (
     audioBlob: Blob,
     mimeType: string,
-    emotions: SupportedEmotion[]
+    emotion: SupportedEmotion
   ) => {
-    if (emotions.length === 0) {
-      stopLiveListeningLoop("Pick at least one emotion to restart live listening.");
-      return;
-    }
-
     const chunkId = `${Date.now()}`;
     const requestId = ++liveRequestSequenceRef.current;
     const file = new File([audioBlob], `emotalk-live-${chunkId}.${getLiveAudioExtension(mimeType)}`, {
@@ -297,25 +293,31 @@ function App() {
     try {
       setIsAnalyzing(true);
       setAnalysisError(null);
-      setLiveStatus(`Analyzing live speech for ${emotions.join(", ")}.`);
+      setLiveStatus(`Analyzing live speech for ${emotion}.`);
 
-      const result = await analyzeLiveAudio(backendBaseUrl, file, emotions);
+      const result = await analyzeLiveAudio(
+        backendBaseUrl,
+        file,
+        emotion,
+        conversationSessionId ?? undefined
+      );
 
       if (requestId !== liveRequestSequenceRef.current) {
         return;
       }
 
+      setConversationSessionId(result.sessionId ?? null);
       setAnalysisResult(result);
       setTranscriptEntries((currentEntries) => [
         {
           id: chunkId,
           createdAt: getTimeLabel(),
           transcript: result.transcript,
-          emotions,
+          emotion,
         },
         ...currentEntries,
       ].slice(0, 6));
-      appendLog(`Live response updated for ${emotions.join(", ")}.`);
+      appendLog(`Live response updated for ${emotion}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Live audio analysis failed.";
       setAnalysisError(message);
@@ -388,7 +390,7 @@ function App() {
         return;
       }
 
-      const nextEmotions = [...selectedEmotionsRef.current];
+      const nextEmotion = selectedEmotionsRef.current[0];
       const audioBlob = new Blob(parts, { type: mimeType });
 
       if (audioBlob.size < MIN_ANALYSIS_BLOB_SIZE_BYTES) {
@@ -399,7 +401,12 @@ function App() {
         return;
       }
 
-      void sendLiveAudioChunk(audioBlob, mimeType, nextEmotions);
+      if (!nextEmotion) {
+        stopLiveListeningLoop("Pick at least one emotion to start live listening.");
+        return;
+      }
+
+      void sendLiveAudioChunk(audioBlob, mimeType, nextEmotion);
     };
 
     recorder.start();
@@ -504,6 +511,7 @@ function App() {
       setJoined(true);
       setTranscriptEntries([]);
       setAnalysisResult(null);
+      setConversationSessionId(null);
       appendLog(`Publishing mic + camera to channel ${nextSession.channel} as ${joinedUid}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to join channel.";
@@ -666,8 +674,8 @@ function App() {
             <div>
               <h2>Emotion Steering</h2>
               <p>
-                Pick up to 3 emotions before joining or while you are already in the call. Changes
-                apply automatically to the next live analysis chunk.
+                Pick an emotion before joining or while you are already in the call. The live loop
+                uses the first selected emotion for the next chunk.
               </p>
             </div>
             <div className={`status-pill ${isListeningLive ? "status-pill-live" : ""}`}>
@@ -693,7 +701,7 @@ function App() {
           </div>
 
           <p className="muted">
-            Active emotions: {selectedEmotions.length > 0 ? selectedEmotions.join(", ") : "none"}
+            Active emotion: {selectedEmotions[0] ?? "none"}
           </p>
           {analysisError ? <p className="error">{analysisError}</p> : null}
         </section>
@@ -718,12 +726,10 @@ function App() {
                 <p className="transcript">{analysisResult.transcript}</p>
               </article>
 
-              {analysisResult.responses.map((response) => (
-                <article key={response.emotion} className="analysis-card">
-                  <p className="eyebrow">{response.emotion}</p>
-                  <p className="analysis-response">{response.text}</p>
-                </article>
-              ))}
+              <article className="analysis-card">
+                <p className="eyebrow">{analysisResult.emotion}</p>
+                <p className="analysis-response">{analysisResult.reply}</p>
+              </article>
             </div>
           ) : (
             <p className="muted">No live transcript yet. Join and start speaking.</p>
@@ -744,7 +750,7 @@ function App() {
                 <article key={entry.id} className="timeline-card">
                   <div className="timeline-meta">
                     <strong>{entry.createdAt}</strong>
-                    <span>{entry.emotions.join(", ")}</span>
+                    <span>{entry.emotion}</span>
                   </div>
                   <p className="timeline-text">{entry.transcript}</p>
                 </article>
