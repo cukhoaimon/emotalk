@@ -1,0 +1,41 @@
+/* ── Unicorn Dream Theme Tokens ── */
+:root {
+  color-scheme: dark;
+  font-family: "Nunito", "Segoe UI", sans-serif;
+
+  --gm-bg: #0d0818;
+  --gm-surface: rgba(28, 14, 48, 0.72);
+  --gm-surface-raised: rgba(42, 20, 70, 0.80);
+  --gm-surface-hover: rgba(68, 34, 102, 0.90);
+  --gm-border: rgba(196, 132, 252, 0.18);
+  --gm-text: #fdf4ff;
+  --gm-text-secondary: #c4b5fd;
+
+  /* Unicorn palette */
+  --uc-pink: #f472b6;
+  --uc-lavender: #c084fc;
+  --uc-sky: #67e8f9;
+  --uc-mint: #6ee7b7;
+  --uc-coral: #fb7185;
+  --uc-gold: #fde68a;
+  --uc-violet: #a78bfa;
+
+  /* Semantic mappings */
+  --gm-blue: #c084fc;
+  --gm-blue-hover: #d8b4fe;
+  --gm-green: #6ee7b7;
+  --gm-green-ring: #34d399;
+  --gm-red: #fb7185;
+  --gm-red-hover: #fda4af;
+  --gm-yellow: #fde68a;
+
+  --gm-radius-sm: 12px;
+  --gm-radius-md: 16px;
+  --gm-radius-lg: 20px;
+  --gm-radius-xl: 32px;
+
+  /* Rainbow gradients */
+  --rainbow-colors: #f472b6 0%, #c084fc 16%, #67e8f9 33%, #6ee7b7 50%, #fde68a 66%, #fb7185 83%, #f472b6 100%;
+  --rainbow: linear-gradient(90deg, var(--rainbow-colors));
+  --rainbow-v: linear-gradient(180deg, var(--rainbow-colors));
+}
