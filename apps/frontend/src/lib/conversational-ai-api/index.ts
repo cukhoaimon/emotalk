@@ -39,7 +39,7 @@ const formatLog = factoryFormatLog({ tag: TAG })
  * @remarks
  * - `enableRenderModeFallback` defaults to `true` when not provided
  */
-export { EConversationalAIAPIEvents, ETranscriptHelperMode } from './type'
+export { EConversationalAIAPIEvents, ETranscriptHelperMode, ETurnStatus } from './type'
 export type { TStateChangeEvent, TModuleError, ITranscriptHelperItem, IUserTranscription, IAgentTranscription } from './type'
 
 export interface IConversationalAIAPIConfig {

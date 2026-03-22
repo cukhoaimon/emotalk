@@ -20,6 +20,11 @@ async function speakAvatar(req, res, next) {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Avatar-Voice-Id", result.voiceId);
     res.setHeader("X-Avatar-Model-Id", result.modelId);
+    res.setHeader("X-Avatar-Duration-Ms", String(result.performance.durationMs));
+    res.setHeader(
+      "X-Avatar-Performance",
+      Buffer.from(JSON.stringify(result.performance), "utf8").toString("base64url")
+    );
     res.status(200).send(result.audioBuffer);
   } catch (error) {
     next(error);

@@ -1,46 +1,40 @@
 import { RefObject } from "react";
-import { AudioMeterCard } from "./AudioMeterCard";
 
 interface LocalCameraPreviewProps {
   containerRef: RefObject<HTMLDivElement>;
   joined: boolean;
-  cameraEnabled: boolean;
   micEnabled: boolean;
   micStatus: string;
-  localAudioLevel: number;
-  localMeterSegments: boolean[];
+}
+
+function IconMicOffSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
 }
 
 export function LocalCameraPreview({
   containerRef,
-  joined,
-  cameraEnabled,
   micEnabled,
   micStatus,
-  localAudioLevel,
-  localMeterSegments,
 }: LocalCameraPreviewProps) {
   return (
-    <article className="call-tile">
-      <div className="tile-topbar">
-        <div>
-          <span className="tile-label">You</span>
-          <strong className="tile-title">Your camera preview</strong>
-        </div>
-        <span className="tile-badge">{cameraEnabled ? "Camera live" : "Camera idle"}</span>
+    <article className={`meet-tile${micStatus === "speaking" ? " meet-tile--speaking" : ""}`}>
+      <div ref={containerRef} className="meet-tile-video" />
+      <div className="meet-nameplate">
+        <span>You</span>
+        {!micEnabled && (
+          <span className="meet-nameplate-muted">
+            <IconMicOffSmall />
+          </span>
+        )}
       </div>
-      <div ref={containerRef} className="video-stage" />
-      <div className="video-overlay">
-        <span>{joined ? "Ready for your call" : "Camera preview will appear here after joining"}</span>
-        <strong>{micEnabled ? "Microphone on" : "Microphone off"}</strong>
-      </div>
-      <AudioMeterCard
-        title="Voice Activity"
-        status={micStatus === "speaking" ? "Speaking" : micEnabled ? "Listening" : "Muted"}
-        level={localAudioLevel}
-        segments={localMeterSegments}
-        barPrefix="local"
-      />
     </article>
   );
 }

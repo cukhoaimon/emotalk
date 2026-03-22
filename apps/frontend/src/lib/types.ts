@@ -15,4 +15,13 @@ export type EmotionConfig = {
   accent: string;
   glow: string;
   description: string;
+  avatarMode?: "canvas" | "image";
+  imageSrc?: string;
+};
+
+export type CallSummaryData = {
+  durationSeconds: number;
+  entries: TranscriptEntry[];
+  dominantEmotion: SupportedEmotion;
+  emotionBreakdown: Partial<Record<SupportedEmotion, number>>;
 };

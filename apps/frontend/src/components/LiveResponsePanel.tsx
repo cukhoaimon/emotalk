@@ -11,17 +11,17 @@ interface LiveResponsePanelProps {
 export function LiveResponsePanel({ analysisResult, transcriptEntries, isAnalyzing, liveStatus }: LiveResponsePanelProps) {
   return (
     <>
-      <section className="panel">
+      <div style={{ marginBottom: 16 }}>
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Live Response</p>
-            <h2>Latest AI output</h2>
+            <p className="eyebrow">Response</p>
+            <h2 style={{ margin: "4px 0 0", fontSize: "0.95rem", fontWeight: 500 }}>Avatar Reply</h2>
           </div>
           <span className="tile-badge active">{isAnalyzing ? "Responding" : liveStatus}</span>
         </div>
         {analysisResult ? (
           <div className="stack-panel">
-            <article className="analysis-card analysis-card-wide">
+            <article className="analysis-card">
               <p className="eyebrow">Transcript</p>
               <p className="transcript">{analysisResult.transcript}</p>
             </article>
@@ -31,19 +31,19 @@ export function LiveResponsePanel({ analysisResult, transcriptEntries, isAnalyzi
             </article>
           </div>
         ) : (
-          <p className="empty-copy">No live transcript yet. Join the room and start speaking.</p>
+          <p className="empty-copy">Start speaking after joining — your avatar will reply here.</p>
         )}
-      </section>
-      <section className="panel">
+      </div>
+      <div>
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Transcript Chunks</p>
-            <h2>Recent segments</h2>
+            <p className="eyebrow">History</p>
+            <h2 style={{ margin: "4px 0 0", fontSize: "0.95rem", fontWeight: 500 }}>Conversation</h2>
           </div>
         </div>
         <div className="timeline-list">
           {transcriptEntries.length === 0 ? (
-            <p className="empty-copy">No live chunks processed yet.</p>
+            <p className="empty-copy">No conversation history yet.</p>
           ) : (
             transcriptEntries.map((entry) => (
               <article key={entry.id} className="timeline-card">
@@ -56,7 +56,7 @@ export function LiveResponsePanel({ analysisResult, transcriptEntries, isAnalyzi
             ))
           )}
         </div>
-      </section>
+      </div>
     </>
   );
 }

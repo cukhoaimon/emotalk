@@ -5,6 +5,7 @@ const {
   getAgoraConfig,
   startConversationalAgent,
   stopConversationalAgent,
+  updateConversationalAgent,
 } = require("../services/conversationalAgentService");
 
 const router = express.Router();
@@ -138,6 +139,20 @@ router.post("/agora/agent/:agentId/leave", async (req, res, next) => {
 
     const response = await stopConversationalAgent(req.params.agentId);
     return res.status(200).json(response || { status: "stopped" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/agora/agent/:agentId/update", async (req, res, next) => {
+  try {
+    if (!req.params.agentId) {
+      return res.status(400).json({ error: "Missing agentId." });
+    }
+
+    const emotion = typeof req.body.emotion === "string" ? req.body.emotion.trim() : "joy";
+    const response = await updateConversationalAgent(req.params.agentId, emotion);
+    return res.status(200).json(response || { status: "updated" });
   } catch (error) {
     return next(error);
   }

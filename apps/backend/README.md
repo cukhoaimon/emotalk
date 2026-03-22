@@ -106,12 +106,12 @@ This endpoint skips output persistence so it can be used for live call loops.
 JSON body:
 
 - `message`: user text input
-- `emotion`: a single emotion such as `fear`
+- `emotion`: a single emotion such as `anxiety`
 - `sessionId` (optional): continue an existing conversation session
 
 ## Notes
 
-- Supported emotions: `joy`, `sadness`, `anger`, `fear`, `disgust`
+- Supported emotions: `joy`, `sadness`, `anxiety`, `anger`
 - Invalid file types, missing emotion, unsupported emotions, and OpenAI API failures return JSON errors
 - Uploaded files are deleted after each request finishes
 - Successful requests also write JSON output files into the `outputs/` folder

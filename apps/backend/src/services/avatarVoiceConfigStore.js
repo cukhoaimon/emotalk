@@ -3,7 +3,7 @@ const path = require("path");
 
 const CONFIG_DIRECTORY = path.resolve(__dirname, "..", "..", "data");
 const CONFIG_PATH = path.join(CONFIG_DIRECTORY, "avatar-voice-config.json");
-const EMOTIONS = ["joy", "sadness", "anger", "fear", "disgust"];
+const EMOTIONS = ["joy", "sadness", "anxiety", "anger"];
 
 function ensureConfigDirectory() {
   fs.mkdirSync(CONFIG_DIRECTORY, { recursive: true });
@@ -14,9 +14,8 @@ function getEmptyConfig() {
     default: null,
     joy: null,
     sadness: null,
+    anxiety: null,
     anger: null,
-    fear: null,
-    disgust: null
   };
 }
 

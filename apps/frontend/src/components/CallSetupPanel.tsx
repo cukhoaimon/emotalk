@@ -1,113 +1,88 @@
-import { ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
 import { AgoraSession, AppMode } from "../lib/api";
 import { EmotionConfig } from "../lib/types";
+
+function toFriendlyError(raw: string): string {
+  const msg = raw.toLowerCase();
+  if (msg.includes("not allowed") || msg.includes("permission") || msg.includes("notallowederror")) {
+    return "Microphone or camera access was denied. Please allow access in your browser settings and try again.";
+  }
+  if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch")) {
+    return "Could not reach the server. Check your internet connection and try again.";
+  }
+  if (msg.includes("token") || msg.includes("auth") || msg.includes("unauthorized") || msg.includes("403")) {
+    return "Session token expired or invalid. Refresh the page and try again.";
+  }
+  if (msg.includes("channel") || msg.includes("room")) {
+    return "Could not join the room. Check the room name and try again.";
+  }
+  if (msg.includes("agora")) {
+    return "Connection to the call service failed. Please try again.";
+  }
+  return "Something went wrong. Please try again.";
+}
 
 interface CallSetupPanelProps {
   channelInput: string;
   joined: boolean;
   connecting: boolean;
-  cameraEnabled: boolean;
-  micEnabled: boolean;
-  cameraTrack: ICameraVideoTrack | null;
-  micTrack: IMicrophoneAudioTrack | null;
   isDebugMode: boolean;
   mode: AppMode;
   session: AgoraSession | null;
   isListeningLive: boolean;
   currentEmotion: EmotionConfig;
   combinedError: string | null;
+  showDevTools: boolean;
   onChannelInputChange: (value: string) => void;
   onJoin: () => void;
   onLeave: () => void;
-  onToggleCamera: () => void;
-  onToggleMic: () => void;
   onOpenDebugViewer: () => void;
 }
 
 export function CallSetupPanel({
-  channelInput,
   joined,
-  connecting,
-  cameraEnabled,
-  micEnabled,
-  cameraTrack,
-  micTrack,
-  isDebugMode,
   mode,
   session,
   isListeningLive,
   currentEmotion,
   combinedError,
-  onChannelInputChange,
+  showDevTools,
   onJoin,
-  onLeave,
-  onToggleCamera,
-  onToggleMic,
-  onOpenDebugViewer,
 }: CallSetupPanelProps) {
   return (
-    <section className="panel">
+    <div>
       <div className="panel-header">
         <div>
-          <p className="eyebrow">Call Setup</p>
-          <h2>Setup your call</h2>
+          <p className="eyebrow">Call Info</p>
+          <h2 style={{ margin: "4px 0 0", fontSize: "0.95rem", fontWeight: 500 }}>
+            {joined ? `In ${session?.channel ?? "call"}` : "Not connected"}
+          </h2>
         </div>
       </div>
-      <label className="field">
-        <span>Room name</span>
-        <input
-          value={channelInput}
-          onChange={(event) => onChannelInputChange(event.target.value)}
-          disabled={joined || connecting}
-        />
-      </label>
-      <div className="control-row">
-        <button type="button" className="control-chip selected" onClick={onJoin} disabled={joined || connecting}>
-          {connecting ? "Connecting..." : "Join call"}
-        </button>
-        <button type="button" className="control-chip" onClick={onLeave} disabled={!joined && !connecting}>
-          Leave call
-        </button>
-      </div>
-      <div className="control-row">
-        <button
-          type="button"
-          className={cameraEnabled ? "control-chip active" : "control-chip"}
-          onClick={onToggleCamera}
-          disabled={!cameraTrack}
-        >
-          {cameraEnabled ? "Turn camera off" : "Turn camera on"}
-        </button>
-        <button
-          type="button"
-          className={micEnabled ? "control-chip active" : "control-chip"}
-          onClick={onToggleMic}
-          disabled={!micTrack}
-        >
-          {micEnabled ? "Mute microphone" : "Enable microphone"}
-        </button>
-      </div>
-      {!isDebugMode ? (
-        <button type="button" className="control-chip" onClick={onOpenDebugViewer}>
-          Open debug tab
-        </button>
-      ) : null}
-      <dl className="meta-grid">
-        <div><dt>Mode</dt><dd>{mode}</dd></div>
-        <div><dt>Status</dt><dd>{joined ? "joined" : "idle"}</dd></div>
-        <div><dt>Session source</dt><dd>{session?.source ?? "not connected yet"}</dd></div>
-        <div><dt>UID</dt><dd>{String(session?.uid ?? "-")}</dd></div>
-      </dl>
+      {showDevTools && (
+        <dl className="meta-grid">
+          <div><dt>Mode</dt><dd>{mode}</dd></div>
+          <div><dt>Status</dt><dd>{joined ? "joined" : "idle"}</dd></div>
+          {session && <div><dt>Source</dt><dd>{session.source}</dd></div>}
+          {session && <div><dt>UID</dt><dd>{String(session.uid ?? "-")}</dd></div>}
+        </dl>
+      )}
       <div className="status-card">
         <span className={`status-dot ${combinedError ? "danger" : ""}`} />
-        <p>
-          {combinedError
-            ? combinedError
-            : joined
-            ? `You are in ${session?.channel}. Live listening is ${isListeningLive ? "running" : "ready"} for ${currentEmotion.title}.`
-            : "Enter a room name, choose one emotion layer, and join when you are ready."}
-        </p>
+        <div style={{ flex: 1 }}>
+          <p>
+            {combinedError
+              ? toFriendlyError(combinedError)
+              : joined
+              ? `Live listening is ${isListeningLive ? "active" : "ready"} · ${currentEmotion.emoji} ${currentEmotion.title}`
+              : "Join when ready."}
+          </p>
+          {combinedError && !joined && (
+            <button type="button" className="retry-btn" onClick={onJoin}>
+              Try again
+            </button>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }

@@ -38,25 +38,22 @@ export type AvatarVoiceCatalog = {
     default: string | null;
     joy: string | null;
     sadness: string | null;
+    anxiety: string | null;
     anger: string | null;
-    fear: string | null;
-    disgust: string | null;
   };
   persisted: {
     default: string | null;
     joy: string | null;
     sadness: string | null;
+    anxiety: string | null;
     anger: string | null;
-    fear: string | null;
-    disgust: string | null;
   };
   fromEnv: {
     default: string | null;
     joy: string | null;
     sadness: string | null;
+    anxiety: string | null;
     anger: string | null;
-    fear: string | null;
-    disgust: string | null;
   };
   voices: Array<{
     voiceId: string;
@@ -66,6 +63,58 @@ export type AvatarVoiceCatalog = {
 };
 
 export type AvatarVoiceMapping = AvatarVoiceCatalog["configured"];
+
+export type AvatarViseme =
+  | "rest"
+  | "closed"
+  | "bite"
+  | "round"
+  | "open"
+  | "wide"
+  | "narrow"
+  | "tongue"
+  | "soft";
+
+export type AvatarVisemeFrame = {
+  startMs: number;
+  endMs: number;
+  viseme: AvatarViseme;
+  emphasis: number;
+};
+
+export type AvatarGestureBeat = {
+  at: number;
+  strength: number;
+  type: "accent" | "support";
+};
+
+export type AvatarGestureStyle =
+  | "expansive"
+  | "empathetic"
+  | "precise"
+  | "cautionary"
+  | "emphatic"
+  | "skeptical";
+
+export type AvatarGesturePlan = {
+  style: AvatarGestureStyle;
+  intensity: number;
+  holdRatio: number;
+  beats: AvatarGestureBeat[];
+};
+
+export type AvatarSpeechPerformance = {
+  durationMs: number;
+  visemes: AvatarVisemeFrame[];
+  gesturePlan: AvatarGesturePlan;
+};
+
+export type AvatarSpeechResponse = {
+  audioBlob: Blob;
+  voiceId: string | null;
+  modelId: string | null;
+  performance: AvatarSpeechPerformance | null;
+};
 
 async function getErrorMessage(response: Response) {
   try {
@@ -122,6 +171,25 @@ export async function stopAgoraAgent(backendBaseUrl: string, agentId: string) {
   const url = new URL(`/agora/agent/${agentId}/leave`, backendBaseUrl);
   const response = await fetch(url.toString(), {
     method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return (await response.json()) as { status?: string };
+}
+
+export async function updateAgoraAgent(
+  backendBaseUrl: string,
+  agentId: string,
+  emotion: string
+) {
+  const url = new URL(`/agora/agent/${agentId}/update`, backendBaseUrl);
+  const response = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ emotion }),
   });
 
   if (!response.ok) {
@@ -223,7 +291,26 @@ export async function requestAvatarSpeech(
     throw new Error(await getErrorMessage(response));
   }
 
-  return await response.blob();
+  const performanceHeader = response.headers.get("X-Avatar-Performance");
+  let performance: AvatarSpeechPerformance | null = null;
+
+  if (performanceHeader) {
+    try {
+      const padded = performanceHeader.replace(/-/g, "+").replace(/_/g, "/");
+      const normalized = padded + "=".repeat((4 - (padded.length % 4 || 4)) % 4);
+      const decoded = atob(normalized);
+      performance = JSON.parse(decoded) as AvatarSpeechPerformance;
+    } catch {
+      performance = null;
+    }
+  }
+
+  return {
+    audioBlob: await response.blob(),
+    voiceId: response.headers.get("X-Avatar-Voice-Id"),
+    modelId: response.headers.get("X-Avatar-Model-Id"),
+    performance,
+  } satisfies AvatarSpeechResponse;
 }
 
 export async function fetchAvatarVoiceCatalog(backendBaseUrl: string) {
